@@ -1,75 +1,42 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 using System.Threading.Tasks;
 
 namespace ConsoleApp2
 {
-
-    public class JsonReader
+    public class JsonReaderItem
     {
-        public Stream Stream { get; }
-        private byte[] buffer;
 
-        public JsonReader(Stream stream, int bufferSize = 1024)
+        public static JsonProperty GetNextJsonProperty(Stream stream)
         {
-            this.Stream = stream;
-            this.buffer = new byte[bufferSize];
+            if (stream.Position > 0)
+                stream.Seek(0, SeekOrigin.Begin);
 
-            if (!this.Stream.CanRead)
-                throw new Exception("Stream is not readable");
-        }
+            var buffer = new byte[1024];
+            stream.Read(buffer);
 
-        // Can't use a yield return here because the reader is being passed by reference
-
-        //public IEnumerable<JsonProperty> EnumerateProperties()
-        //{
-        //    var jsonReaderstate = new JsonReaderState(new JsonReaderOptions { AllowTrailingCommas = true });
-
-        //    if (this.Stream.Position > 0)
-        //        this.Stream.Seek(0, SeekOrigin.Begin);
-
-        //    Stream.Read(buffer);
-        //    var reader = new Utf8JsonReader(buffer, isFinalBlock: false, state: jsonReaderstate);
-
-        //    JsonProperty jsonProperty;
-        //    while ((jsonProperty = InnerRead(ref reader)) != null)
-        //        yield return jsonProperty;
-        //}
-
-        // Use an action instead
-        public void ReadProperties(Action<JsonProperty> onJsonPropRetrieved)
-        {
-            ArgumentNullException.ThrowIfNull(onJsonPropRetrieved);
 
             var jsonReaderstate = new JsonReaderState(new JsonReaderOptions { AllowTrailingCommas = true });
-
-            if (this.Stream.Position > 0)
-                this.Stream.Seek(0, SeekOrigin.Begin);
-
-            Stream.Read(buffer);
             var reader = new Utf8JsonReader(buffer, isFinalBlock: false, state: jsonReaderstate);
 
-            JsonProperty jsonProperty;
-            while ((jsonProperty = InnerRead(ref reader)) != null)
-                onJsonPropRetrieved?.Invoke(jsonProperty);
+            var jsonProperty = InnerRead(ref reader);
+
+            return jsonProperty;
         }
 
-        private JsonProperty InnerRead(ref Utf8JsonReader reader)
+        private static JsonProperty InnerRead(ref Utf8JsonReader reader, Stream stream)
         {
             try
             {
                 while (!reader.Read())
                 {
-                    if (Stream.Position >= Stream.Length)
+                    if (stream.Position >= stream.Length)
                         return null;
 
-                    GetMoreBytesFromStream(Stream, ref buffer, ref reader);
+                    GetMoreBytesFromStream(stream, ref buffer, ref reader);
                 }
 
                 if (reader.TokenType == JsonTokenType.StartObject || reader.TokenType == JsonTokenType.StartArray || reader.TokenType == JsonTokenType.EndObject || reader.TokenType == JsonTokenType.EndArray)
@@ -130,14 +97,6 @@ namespace ConsoleApp2
             reader = new Utf8JsonReader(buffer, isFinalBlock: bytesRead == 0, reader.CurrentState);
         }
 
-    }
 
-
-
-    public class JsonProperty
-    {
-        public string Name { get; set; }
-        public Object Value { get; set; }
-        public JsonTokenType TokenType { get; set; }
     }
 }
