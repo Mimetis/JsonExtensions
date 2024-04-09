@@ -25,23 +25,27 @@ namespace ConsoleApp2
                 throw new Exception("Stream is not readable");
         }
 
-        public IEnumerable<JsonProperty> EnumerateProperties()
-        {
-            
-            var jsonReaderstate = new JsonReaderState(new JsonReaderOptions { AllowTrailingCommas = true });
 
-            if (this.Stream.Position > 0)
-                this.Stream.Seek(0, SeekOrigin.Begin);
+        // Can't use a yield return here because the reader is being passed by reference
 
-            Stream.Read(buffer);
-            var reader = new Utf8JsonReader(buffer, isFinalBlock: false, state: jsonReaderstate);
+        // public IEnumerable<JsonProperty> EnumerateProperties()
+        // {
 
-            JsonProperty jsonProperty;
-            while ((jsonProperty = InnerRead(ref reader)) != null)
-                yield return jsonProperty;
+        //     var jsonReaderstate = new JsonReaderState(new JsonReaderOptions { AllowTrailingCommas = true });
 
-        }
+        //     if (this.Stream.Position > 0)
+        //         this.Stream.Seek(0, SeekOrigin.Begin);
 
+        //     Stream.Read(buffer);
+        //     var reader = new Utf8JsonReader(buffer, isFinalBlock: false, state: jsonReaderstate);
+
+        //     JsonProperty jsonProperty;
+        //     while ((jsonProperty = InnerRead(ref reader)) != null)
+        //         yield return jsonProperty;
+
+        // }
+
+        // Use an action instead
         public void ReadProperties(Action<JsonProperty> onJsonPropRetrieved)
         {
             ArgumentNullException.ThrowIfNull(onJsonPropRetrieved);
@@ -59,6 +63,7 @@ namespace ConsoleApp2
                 onJsonPropRetrieved?.Invoke(jsonProperty);
 
         }
+
 
         private JsonProperty InnerRead(ref Utf8JsonReader reader)
         {
