@@ -2,6 +2,7 @@
 using System.Text;
 using System.IO.Pipelines;
 using System.Buffers;
+using System.Reflection.PortableExecutable;
 
 namespace ConsoleApp2
 {
@@ -32,16 +33,17 @@ namespace ConsoleApp2
             byte[] bytes = Encoding.UTF8.GetBytes(jsonString);
             var stream = new MemoryStream(bytes);
 
-            var jsonReader = new JsonReader(stream, 30);
+            var jsonReader = new JsonReader(stream, 1024);
 
             foreach (var prop in jsonReader.Read())
             {
-                if (!string.IsNullOrEmpty(prop.Name))
-                    Console.WriteLine($"{prop.Name} ({prop.TokenType}): {prop.Value}");
+                if (prop.TokenType == JsonTokenType.StartObject || prop.TokenType == JsonTokenType.StartArray || prop.TokenType == JsonTokenType.EndObject || prop.TokenType == JsonTokenType.EndArray)
+                    Console.WriteLine($"- ({prop.TokenType})");
+                else if (prop.TokenType == JsonTokenType.PropertyName)
+                    Console.WriteLine($"Property: {prop.Name}");
                 else
-                    Console.WriteLine($"- {prop.TokenType}");
+                    Console.WriteLine($"Value: {prop.Value}");
             }
-
         }
     }
 
