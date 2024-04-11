@@ -20,7 +20,7 @@ namespace ConsoleApp2
         public Stream Stream { get; }
 
         // buffer size
-        private int bufferSize;
+        private readonly int bufferSize;
 
 
         /// <summary>
@@ -38,36 +38,13 @@ namespace ConsoleApp2
                 throw new Exception("Stream is not readable");
         }
 
-
-        //public IEnumerable<JsonProperty> Read()
-        //{
-
-
-        //    var jsonReaderstate = new JsonReaderState(new JsonReaderOptions { AllowTrailingCommas = true });
-        //    int bytesConsumed = 0;
-        //    // create a buffer to read the stream into
-        //    var buffer = new byte[10];
-
-        //    if (this.Stream.Position > 0)
-        //        this.Stream.Seek(0, SeekOrigin.Begin);
-
-        //    Stream.Read(buffer);
-
-        //    for (var index = 1; index < 100; index++)
-        //    {
-        //        var p = JsonReaderItem.GetNextJsonProperty(ref buffer, bytesConsumed, Stream, ref jsonReaderstate);
-
-        //        jsonReaderstate = p.state;
-        //        bytesConsumed = p.bytesConsumed;
-
-      
-        //        yield return p.property;
-        //    }
-        //}
-
-        public IEnumerable<JsonReaderValue> EnumerateProperties()
+        /// <summary>
+        /// Enumerate over the stream and read the properties
+        /// </summary>
+        /// <returns></returns>
+        public IEnumerable<JsonReaderValue> Read()
         {
-            var state = new JsonReaderState(new JsonReaderOptions { AllowTrailingCommas = true });
+            var currentState = new JsonReaderState(new JsonReaderOptions { AllowTrailingCommas = true });
             int bytesConsumed = 0;
 
             // create a buffer to read the stream into
@@ -93,7 +70,8 @@ namespace ConsoleApp2
                     Stream.Read(buffer.AsSpan(leftover.Length));
                 }
 
-                var reader = new Utf8JsonReader(buffer, isFinalBlock: false, state: state);
+                // create a new ref struct json reader
+                var reader = new Utf8JsonReader(buffer, isFinalBlock: false, state: currentState);
                 JsonReaderValue jsonProperty;
                 try
                 {
@@ -110,9 +88,10 @@ namespace ConsoleApp2
 
                 // temp save
                 bytesConsumed = (int)reader.BytesConsumed;
-                state = reader.CurrentState;
+                currentState = reader.CurrentState;
 
-                if (jsonProperty == null)
+                // end of stream
+                if (jsonProperty == null && Stream.Position >= Stream.Length)
                     yield break;
 
                 yield return jsonProperty;
@@ -120,11 +99,11 @@ namespace ConsoleApp2
         }
 
 
+        // Read the next property from the buffer
         private JsonReaderValue InnerRead(ref Utf8JsonReader reader, ref byte[] buffer)
         {
             try
             {
-
                 while (!reader.Read())
                 {
                     if (Stream.Position >= Stream.Length)
@@ -167,6 +146,7 @@ namespace ConsoleApp2
             }
         }
 
+        // Get more bytes from the stream because the reader has consumed all the bytes in the buffer and this buffer is not long enough to hold the next token
         private static void GetMoreBytesFromStream(Stream stream, ref byte[] buffer, ref Utf8JsonReader reader)
         {
             int bytesRead;
@@ -175,10 +155,7 @@ namespace ConsoleApp2
                 ReadOnlySpan<byte> leftover = buffer.AsSpan((int)reader.BytesConsumed);
 
                 if (leftover.Length == buffer.Length)
-                {
                     Array.Resize(ref buffer, buffer.Length * 2);
-                    Console.WriteLine($"Increased buffer size to {buffer.Length}");
-                }
 
                 leftover.CopyTo(buffer);
                 bytesRead = stream.Read(buffer.AsSpan(leftover.Length));
@@ -189,31 +166,6 @@ namespace ConsoleApp2
             }
             reader = new Utf8JsonReader(buffer, isFinalBlock: bytesRead == 0, reader.CurrentState);
         }
-
-
-
-
-        //// Use an action instead
-        //public void ReadProperties(Action<JsonProperty> onJsonPropRetrieved)
-        //{
-        //    ArgumentNullException.ThrowIfNull(onJsonPropRetrieved);
-
-        //    var jsonReaderstate = new JsonReaderState(new JsonReaderOptions { AllowTrailingCommas = true });
-
-        //    if (this.Stream.Position > 0)
-        //        this.Stream.Seek(0, SeekOrigin.Begin);
-
-        //    Stream.Read(buffer);
-        //    var reader = new Utf8JsonReader(buffer, isFinalBlock: false, state: jsonReaderstate);
-
-        //    JsonProperty jsonProperty;
-        //    while ((jsonProperty = InnerRead(ref reader)) != null)
-        //    {
-        //        onJsonPropRetrieved?.Invoke(jsonProperty);
-        //        reader = new Utf8JsonReader(buffer, isFinalBlock: false, reader.CurrentState);
-        //    }
-        //}
-
     }
 
 
