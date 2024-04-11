@@ -37,14 +37,9 @@ namespace ConsoleApp2
             foreach (var prop in jsonReader.Read())
             {
                 if (!string.IsNullOrEmpty(prop.Name))
-                {
                     Console.WriteLine($"{prop.Name} ({prop.TokenType}): {prop.Value}");
-                }
                 else
-                {
                     Console.WriteLine($"- {prop.TokenType}");
-                }
-
             }
 
         }
