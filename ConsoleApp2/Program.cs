@@ -33,7 +33,7 @@ namespace ConsoleApp2
             byte[] bytes = Encoding.UTF8.GetBytes(jsonString);
             var stream = new MemoryStream(bytes);
 
-            var jsonReader = new JsonReader(stream, 1024);
+            var jsonReader = new JsonReader(stream, 1024); // test 10 to see buffer increase
 
             foreach (var prop in jsonReader.Read())
             {

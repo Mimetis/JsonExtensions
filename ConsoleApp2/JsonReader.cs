@@ -65,7 +65,8 @@ namespace ConsoleApp2
             var overAllBytesConsumedUntilResetBuffer = 0;
             var tokenCountReadUntilResetBuffer = 0;
 
-            while (true)
+            // while we have bytes read from the stream
+            while (streamReadLength > 0)
             {
                 // move the buffer to the next position according to the overall (in progress) bytes consumed
                 var spanBuffer = buffer.AsSpan(overAllBytesConsumedUntilResetBuffer);
@@ -86,14 +87,11 @@ namespace ConsoleApp2
                         }
                         else
                         {
+                            // check if we are still have something to read from the stream
                             streamReadLength = MoveBufferBackToInitialPosition(ref buffer, overAllBytesConsumedUntilResetBuffer);
 
                             tokenCountReadUntilResetBuffer = 0;
                             overAllBytesConsumedUntilResetBuffer = 0;
-
-                            // if we have read 0 bytes, we are at the end of the stream
-                            if (streamReadLength == 0)
-                                yield break;
                         }
 
                         // loop again to try to read the next token from the buffer
