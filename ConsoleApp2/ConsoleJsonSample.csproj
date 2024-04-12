@@ -10,4 +10,14 @@
     <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\JsonExtensions\JsonExtensions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Address.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

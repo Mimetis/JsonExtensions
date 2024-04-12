@@ -1,14 +1,35 @@
-﻿using System.Text.Json;
-using System.Text;
-using System.IO.Pipelines;
-using System.Buffers;
-using System.Reflection.PortableExecutable;
+﻿using System.Text;
+using System.Text.Json;
+using JsonExtensions;
 
-namespace ConsoleApp2
+namespace ConsoleJsonSample
 {
     internal class Program
     {
+        // Main is mark as async (even if not needed)
+        // to be sure we can call the JsonReader.Read() method from an async scope
         static async Task Main(string[] args)
+        {
+            var jsonReader = new JsonReader(GetFileStream(), 1024); // test 10 to see buffer increase in debug console
+
+            foreach (var prop in jsonReader.Read())
+            {
+                if (prop.TokenType == JsonTokenType.StartObject || prop.TokenType == JsonTokenType.StartArray || prop.TokenType == JsonTokenType.EndObject || prop.TokenType == JsonTokenType.EndArray)
+                    Console.WriteLine($"- ({prop.TokenType})");
+                else if (prop.TokenType == JsonTokenType.PropertyName)
+                    Console.WriteLine($"Property: {prop.Name}");
+                else
+                    Console.WriteLine($"Value: {prop.Value}");
+            }
+        }
+
+
+        static FileStream GetFileStream()
+        {
+            return new FileStream("Address.json", FileMode.Open);
+        }
+
+        static MemoryStream GetMemoryStream()
         {
             var jsonString = @"[{
                 ""Date"": ""2019-08-01T00:00:00-07:00"",
@@ -29,22 +50,10 @@ namespace ConsoleApp2
                 ""Summary"": ""Hot""
             }]";
 
-            // Will eventually be replaced with a FileStream
             byte[] bytes = Encoding.UTF8.GetBytes(jsonString);
-            var stream = new MemoryStream(bytes);
-
-            var jsonReader = new JsonReader(stream, 1024); // test 10 to see buffer increase
-
-            foreach (var prop in jsonReader.Read())
-            {
-                if (prop.TokenType == JsonTokenType.StartObject || prop.TokenType == JsonTokenType.StartArray || prop.TokenType == JsonTokenType.EndObject || prop.TokenType == JsonTokenType.EndArray)
-                    Console.WriteLine($"- ({prop.TokenType})");
-                else if (prop.TokenType == JsonTokenType.PropertyName)
-                    Console.WriteLine($"Property: {prop.Name}");
-                else
-                    Console.WriteLine($"Value: {prop.Value}");
-            }
+            return new MemoryStream(bytes);
         }
+
     }
 
 }

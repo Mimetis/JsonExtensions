@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection.PortableExecutable;
@@ -9,7 +10,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using System.Threading.Tasks;
 
-namespace ConsoleApp2
+namespace JsonExtensions
 {
 
     public class JsonReader
@@ -73,7 +74,7 @@ namespace ConsoleApp2
 
                 // create a new ref struct json reader
                 var reader = new Utf8JsonReader(spanBuffer, isFinalBlock: false, state: currentState);
-                JsonReaderValue jsonProperty;
+                JsonReaderValue? jsonProperty;
                 try
                 {
                     // if we have at leat one token in the buffer, we can try to read it
@@ -116,7 +117,7 @@ namespace ConsoleApp2
                 currentState = reader.CurrentState;
 
                 // end of stream
-                if (jsonProperty == null && Stream.Position >= Stream.Length)
+                if (jsonProperty == null || Stream.Position >= Stream.Length)
                     yield break;
 
                 yield return jsonProperty;
@@ -128,7 +129,7 @@ namespace ConsoleApp2
         /// <summary>
         /// Try to read the next token from the buffer
         /// </summary>
-        private bool InnerTryRead(ref Utf8JsonReader reader, out JsonReaderValue value)
+        private bool InnerTryRead(ref Utf8JsonReader reader, out JsonReaderValue? value)
         {
             try
             {
@@ -150,7 +151,7 @@ namespace ConsoleApp2
                     return true;
                 }
 
-                JsonValue propertyValue = null;
+                JsonValue? propertyValue = null;
                 if (reader.TokenType == JsonTokenType.Null || reader.TokenType == JsonTokenType.None)
                     propertyValue = null;
                 else if (reader.TokenType == JsonTokenType.String)
@@ -183,6 +184,9 @@ namespace ConsoleApp2
         /// </summary>
         private int MoveBufferBackToInitialPosition(ref byte[] buffer, int overAllBytesConsumedUntilResetBuffer)
         {
+#if DEBUG
+            Debug.WriteLine("Buffer reused.");
+#endif
             // prepare the buffer
             ReadOnlySpan<byte> leftover = buffer.AsSpan((int)overAllBytesConsumedUntilResetBuffer);
             // copy the leftover bytes to the beginning of the buffer
@@ -205,6 +209,9 @@ namespace ConsoleApp2
 
                 if (leftover.Length == buffer.Length)
                     Array.Resize(ref buffer, buffer.Length * 2);
+#if DEBUG
+                Debug.WriteLine("Buffer increased to: " + buffer.Length);
+#endif
 
                 leftover.CopyTo(buffer);
                 bytesRead = stream.Read(buffer.AsSpan(leftover.Length));
@@ -221,8 +228,8 @@ namespace ConsoleApp2
 
     public class JsonReaderValue
     {
-        public string Name { get; set; }
-        public JsonValue Value { get; set; }
+        public string? Name { get; set; }
+        public JsonValue? Value { get; set; }
         public JsonTokenType TokenType { get; set; }
     }
 }
