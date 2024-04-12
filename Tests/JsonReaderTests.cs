@@ -1,11 +1,18 @@
 using JsonExtensions;
 using System.Text;
 using System.Text.Json;
+using Xunit.Abstractions;
 
 namespace Tests
 {
     public class JsonReaderTests
     {
+        private readonly string jsonInvalid =
+            """
+            {
+                "a":::::::,,,,,,
+            }
+            """;
 
         private readonly string jsonSmallObject = """{"a": 12,"b": 12,"c": 12}""";
 
@@ -35,6 +42,27 @@ namespace Tests
             }]
             """;
 
+        private readonly ITestOutputHelper output;
+
+        public JsonReaderTests(ITestOutputHelper output)
+        {
+            this.output = output;
+        }
+
+        [Fact]
+        public void InvalidJson_ShouldThrow()
+        {
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonInvalid));
+            var jsonReader = new JsonReader(stream, 10);
+
+            Assert.ThrowsAny<JsonException>(() =>
+            {
+                foreach(var v in jsonReader.Read())
+                {
+                    output.WriteLine($"{v.TokenType}");
+                }
+            });
+        }
 
         [Fact]
         public void SmallObject_ShouldContainsAllTokens()
