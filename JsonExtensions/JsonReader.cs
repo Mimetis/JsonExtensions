@@ -48,13 +48,11 @@ namespace JsonExtensions
         /// <returns></returns>
         public IEnumerable<JsonReaderValue> Read()
         {
+            // state shared accross all instances of Utf8JsonReader
             var currentState = new JsonReaderState(jsonReaderOptions);
 
             // create a buffer to read the stream into
             var buffer = new byte[bufferSize];
-
-            if (this.Stream.Position > 0)
-                this.Stream.Seek(0, SeekOrigin.Begin);
 
             // start reading the stream
             var streamReadLength = Stream.Read(buffer);
@@ -63,14 +61,14 @@ namespace JsonExtensions
                 yield break;
 
             // these two variables are used to keep track of the overall bytes consumed until the buffer is reset
-            var overAllBytesConsumedUntilResetBuffer = 0;
-            var tokenCountReadUntilResetBuffer = 0;
+            var bytesConsumedInBuffer = 0;
+            var tokensCountInBuffer = 0;
 
             // while we have bytes read from the stream
             while (streamReadLength > 0)
             {
                 // move the buffer to the next position according to the overall (in progress) bytes consumed
-                var spanBuffer = buffer.AsSpan(overAllBytesConsumedUntilResetBuffer);
+                var spanBuffer = buffer.AsSpan(bytesConsumedInBuffer);
 
                 // create a new ref struct json reader
                 var reader = new Utf8JsonReader(spanBuffer, isFinalBlock: false, state: currentState);
@@ -82,17 +80,17 @@ namespace JsonExtensions
                     {
                         // if we have not read at least one token in the buffer, we need to read more bytes from the stream and increase the buffer size
                         // else we are at the end of the current buffer and we can move the buffer back to the initial position (and fill with bytes from the stream)
-                        if (tokenCountReadUntilResetBuffer == 0)
+                        if (tokensCountInBuffer == 0)
                         {
-                            GetMoreBytesFromStream(Stream, ref buffer, ref reader);
+                            streamReadLength = GetMoreBytesFromStream(Stream, ref buffer, ref reader);
                         }
                         else
                         {
                             // check if we are still have something to read from the stream
-                            streamReadLength = MoveBufferBackToInitialPosition(ref buffer, overAllBytesConsumedUntilResetBuffer);
+                            streamReadLength = MoveBufferBackToInitialPosition(Stream, ref buffer, bytesConsumedInBuffer);
 
-                            tokenCountReadUntilResetBuffer = 0;
-                            overAllBytesConsumedUntilResetBuffer = 0;
+                            tokensCountInBuffer = 0;
+                            bytesConsumedInBuffer = 0;
                         }
 
                         // loop again to try to read the next token from the buffer
@@ -100,12 +98,11 @@ namespace JsonExtensions
                     }
 
                     // we have read at least one token
-                    tokenCountReadUntilResetBuffer++;
+                    tokensCountInBuffer++;
                 }
-                catch (JsonException ex)
+                catch (JsonException)
                 {
-                    Console.WriteLine(ex.Message);
-                    if (Stream.Position >= Stream.Length)
+                    if (streamReadLength == 0)
                         yield break;
 
                     throw;
@@ -113,11 +110,11 @@ namespace JsonExtensions
 
                 // temp save
                 int bytesConsumed = (int)reader.BytesConsumed;
-                overAllBytesConsumedUntilResetBuffer += bytesConsumed;
+                bytesConsumedInBuffer += bytesConsumed;
                 currentState = reader.CurrentState;
 
                 // end of stream
-                if (jsonProperty == null || Stream.Position >= Stream.Length)
+                if (jsonProperty == null || streamReadLength <= 0)
                     yield break;
 
                 yield return jsonProperty;
@@ -164,17 +161,10 @@ namespace JsonExtensions
                 value = new JsonReaderValue { Value = propertyValue, TokenType = reader.TokenType };
                 return true;
             }
-            catch (JsonException ex)
+            catch (JsonException)
             {
-                Console.WriteLine(ex.Message);
-
-                if (Stream.Position >= Stream.Length)
-                {
-                    value = null;
-                    return false;
-                }
-
-                throw;
+                value = null;
+                return false;
             }
         }
 
@@ -182,7 +172,7 @@ namespace JsonExtensions
         /// <summary>
         /// Move back the buffer to the initial position and fill empty bytes with stream bytes
         /// </summary>
-        private int MoveBufferBackToInitialPosition(ref byte[] buffer, int overAllBytesConsumedUntilResetBuffer)
+        private static int MoveBufferBackToInitialPosition(Stream stream, ref byte[] buffer, int overAllBytesConsumedUntilResetBuffer)
         {
 #if DEBUG
             Debug.WriteLine("Buffer reused.");
@@ -193,14 +183,14 @@ namespace JsonExtensions
             leftover.CopyTo(buffer);
 
             // if needed, read more bytes from the stream
-            return Stream.Read(buffer.AsSpan(leftover.Length));
+            return stream.Read(buffer.AsSpan(leftover.Length));
 
         }
 
         /// <summary>
         /// Get more bytes from the stream because the reader has consumed all the bytes in the buffer and this buffer is not long enough to hold the next token
         /// </summary>
-        private static void GetMoreBytesFromStream(Stream stream, ref byte[] buffer, ref Utf8JsonReader reader)
+        private static int GetMoreBytesFromStream(Stream stream, ref byte[] buffer, ref Utf8JsonReader reader)
         {
             int bytesRead;
             if (reader.BytesConsumed < buffer.Length)
@@ -221,6 +211,8 @@ namespace JsonExtensions
                 bytesRead = stream.Read(buffer);
             }
             reader = new Utf8JsonReader(buffer, isFinalBlock: bytesRead == 0, reader.CurrentState);
+
+            return bytesRead;
         }
     }
 
