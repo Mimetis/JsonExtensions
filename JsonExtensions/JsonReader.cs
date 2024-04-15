@@ -130,7 +130,6 @@ namespace JsonExtensions
                     this.tokensFound++;
                     this.hasMore = true;
                     this.Current = GetValue(ref reader);
-                    Debug.WriteLine(this);
                     return true;
                 }
 
