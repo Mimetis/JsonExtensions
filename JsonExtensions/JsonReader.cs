@@ -23,13 +23,13 @@ namespace JsonExtensions
         // buffer size
         private readonly int bufferSize;
         private readonly JsonReaderOptions jsonReaderOptions;
-
+        private const int MaxTokenGap = 1024 * 1024;
 
         /// <summary>
         /// Create a fast forward json reader
         /// </summary>
         /// <param name="stream">Stream to read</param>
-        /// <param name="bufferSize">buffer size. will adapat if needed</param>
+        /// <param name="bufferSize">buffer size. will adapt if needed</param>
         /// <exception cref="Exception">If stream is not readable</exception>
         public JsonReader(Stream stream, int bufferSize = 1024, JsonReaderOptions jsonReaderOptions = default)
         {
@@ -53,170 +53,108 @@ namespace JsonExtensions
 
             // create a buffer to read the stream into
             var buffer = new byte[bufferSize];
+            int dataLen = 0;
+            bool isFinalBlock = false;
 
-            // start reading the stream
-            var streamReadLength = Stream.Read(buffer);
-
-            if (streamReadLength == 0)
-                yield break;
-
-            // these two variables are used to keep track of the overall bytes consumed until the buffer is reset
-            var bytesConsumedInBuffer = 0;
-            var tokensCountInBuffer = 0;
-
-            // while we have bytes read from the stream
-            while (streamReadLength > 0)
+            while(!isFinalBlock)
             {
-                // move the buffer to the next position according to the overall (in progress) bytes consumed
-                var spanBuffer = buffer.AsSpan(bytesConsumedInBuffer);
+                // at this point, if there's already any data in the buffer, it has been shifted to start at index 0
 
-                // create a new ref struct json reader
-                var reader = new Utf8JsonReader(spanBuffer, isFinalBlock: false, state: currentState);
-                JsonReaderValue? jsonProperty;
-                try
+                if(dataLen < buffer.Length)
                 {
-                    // if we have at leat one token in the buffer, we can try to read it
-                    if (!InnerTryRead(ref reader, out jsonProperty))
+                    // there's space left in the buffer, try to fill it with new data
+                    int todo = buffer.Length - dataLen;
+                    int done = Stream.Read(buffer, dataLen, todo);
+                    dataLen += done;
+                    isFinalBlock = (done < todo);
+                }
+
+                bool foundToken;
+                int tokensFound = 0;
+                int dataPos = 0;
+
+                do
+                {
+                    // create a new ref struct json reader
+                    var spanBuffer = new ReadOnlySpan<byte>(buffer,dataPos,dataLen);
+                    // Trace.WriteLine($"span starting from {dataPos} : {BitConverter.ToString(spanBuffer.ToArray())}");
+
+                    var reader = new Utf8JsonReader(spanBuffer, isFinalBlock, state: currentState);
+
+                    if(InnerTryRead(ref reader, out var jsonProperty))
                     {
-                        // if we have not read at least one token in the buffer, we need to read more bytes from the stream and increase the buffer size
-                        // else we are at the end of the current buffer and we can move the buffer back to the initial position (and fill with bytes from the stream)
-                        if (tokensCountInBuffer == 0)
-                        {
-                            streamReadLength = GetMoreBytesFromStream(Stream, ref buffer, ref reader);
-                        }
-                        else
-                        {
-                            // check if we are still have something to read from the stream
-                            streamReadLength = MoveBufferBackToInitialPosition(Stream, ref buffer, bytesConsumedInBuffer);
+                        foundToken = true;
+                        currentState = reader.CurrentState;
+                        dataPos += (int)reader.BytesConsumed;
+                        dataLen -= (int)reader.BytesConsumed;
+                        tokensFound++;
+                        yield return jsonProperty!;
+                    }
+                    else
+                    {
+                        foundToken = false;
+                    }
+                } while(foundToken);
 
-                            tokensCountInBuffer = 0;
-                            bytesConsumedInBuffer = 0;
-                        }
-
-                        // loop again to try to read the next token from the buffer
-                        continue;
+                if(!isFinalBlock)
+                {
+                    // regardless if we found tokens or not, there may be data for a partial token remaining at the end.
+                    if(dataPos > 0)
+                    {
+                        // Shift partial token data to the start of the buffer
+                        Array.Copy(buffer, dataPos, buffer, 0, dataLen);
                     }
 
-                    // we have read at least one token
-                    tokensCountInBuffer++;
+                    if(tokensFound == 0)
+                    {
+                        // we didn't find any tokens in the current buffer, so it needs to expand.
+                        if(buffer.Length > MaxTokenGap)
+                        {
+                            throw new JsonException($"sanity check on input stream failed, json token gap of more than {MaxTokenGap} bytes");
+                        }
+                        Array.Resize(ref buffer, buffer.Length * 2);
+                    }
                 }
-                catch (JsonException)
-                {
-                    if (streamReadLength == 0)
-                        yield break;
-
-                    throw;
-                }
-
-                // temp save
-                int bytesConsumed = (int)reader.BytesConsumed;
-                bytesConsumedInBuffer += bytesConsumed;
-                currentState = reader.CurrentState;
-
-                // end of stream
-                if (jsonProperty == null || streamReadLength <= 0)
-                    yield break;
-
-                yield return jsonProperty;
             }
         }
-
-
 
         /// <summary>
         /// Try to read the next token from the buffer
         /// </summary>
-        private bool InnerTryRead(ref Utf8JsonReader reader, out JsonReaderValue? value)
+        private static bool InnerTryRead(ref Utf8JsonReader reader, out JsonReaderValue? value)
         {
-            try
-            {
-                if (!reader.Read())
-                {
-                    value = null;
-                    return false;
-                }
-
-                if (reader.TokenType == JsonTokenType.StartObject || reader.TokenType == JsonTokenType.StartArray || reader.TokenType == JsonTokenType.EndObject || reader.TokenType == JsonTokenType.EndArray)
-                {
-                    value = new JsonReaderValue { TokenType = reader.TokenType };
-                    return true;
-                }
-
-                if (reader.TokenType == JsonTokenType.PropertyName)
-                {
-                    value = new JsonReaderValue { TokenType = reader.TokenType, Name = reader.GetString() };
-                    return true;
-                }
-
-                JsonValue? propertyValue = null;
-                if (reader.TokenType == JsonTokenType.Null || reader.TokenType == JsonTokenType.None)
-                    propertyValue = null;
-                else if (reader.TokenType == JsonTokenType.String)
-                    propertyValue = JsonValue.Create(reader.GetString());
-                else if (reader.TokenType == JsonTokenType.False || reader.TokenType == JsonTokenType.True)
-                    propertyValue = JsonValue.Create(reader.GetBoolean());
-                else if (reader.TokenType == JsonTokenType.Number)
-                    propertyValue = JsonValue.Create(reader.GetDouble());
-
-                value = new JsonReaderValue { Value = propertyValue, TokenType = reader.TokenType };
-                return true;
-            }
-            catch (JsonException)
+            if (!reader.Read())
             {
                 value = null;
                 return false;
             }
-        }
 
-
-        /// <summary>
-        /// Move back the buffer to the initial position and fill empty bytes with stream bytes
-        /// </summary>
-        private static int MoveBufferBackToInitialPosition(Stream stream, ref byte[] buffer, int overAllBytesConsumedUntilResetBuffer)
-        {
-#if DEBUG
-            Debug.WriteLine("Buffer reused.");
-#endif
-            // prepare the buffer
-            ReadOnlySpan<byte> leftover = buffer.AsSpan((int)overAllBytesConsumedUntilResetBuffer);
-            // copy the leftover bytes to the beginning of the buffer
-            leftover.CopyTo(buffer);
-
-            // if needed, read more bytes from the stream
-            return stream.Read(buffer.AsSpan(leftover.Length));
-
-        }
-
-        /// <summary>
-        /// Get more bytes from the stream because the reader has consumed all the bytes in the buffer and this buffer is not long enough to hold the next token
-        /// </summary>
-        private static int GetMoreBytesFromStream(Stream stream, ref byte[] buffer, ref Utf8JsonReader reader)
-        {
-            int bytesRead;
-            if (reader.BytesConsumed < buffer.Length)
+            if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray or JsonTokenType.EndObject or JsonTokenType.EndArray)
             {
-                ReadOnlySpan<byte> leftover = buffer.AsSpan((int)reader.BytesConsumed);
-
-                if (leftover.Length == buffer.Length)
-                    Array.Resize(ref buffer, buffer.Length * 2);
-#if DEBUG
-                Debug.WriteLine("Buffer increased to: " + buffer.Length);
-#endif
-
-                leftover.CopyTo(buffer);
-                bytesRead = stream.Read(buffer.AsSpan(leftover.Length));
+                value = new JsonReaderValue { TokenType = reader.TokenType };
+                return true;
             }
-            else
+
+            if (reader.TokenType == JsonTokenType.PropertyName)
             {
-                bytesRead = stream.Read(buffer);
+                value = new JsonReaderValue { TokenType = reader.TokenType, Name = reader.GetString() };
+                return true;
             }
-            reader = new Utf8JsonReader(buffer, isFinalBlock: bytesRead == 0, reader.CurrentState);
 
-            return bytesRead;
+            JsonValue? propertyValue = null;
+            if (reader.TokenType == JsonTokenType.Null || reader.TokenType == JsonTokenType.None)
+                propertyValue = null;
+            else if (reader.TokenType == JsonTokenType.String)
+                propertyValue = JsonValue.Create(reader.GetString());
+            else if (reader.TokenType == JsonTokenType.False || reader.TokenType == JsonTokenType.True)
+                propertyValue = JsonValue.Create(reader.GetBoolean());
+            else if (reader.TokenType == JsonTokenType.Number)
+                propertyValue = JsonValue.Create(reader.GetDouble());
+
+            value = new JsonReaderValue { Value = propertyValue, TokenType = reader.TokenType };
+            return true;
         }
     }
-
-
 
     public class JsonReaderValue
     {

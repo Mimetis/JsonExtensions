@@ -1,17 +1,44 @@
 using JsonExtensions;
 using System.Text;
 using System.Text.Json;
+using Xunit.Abstractions;
 
 namespace Tests
 {
     public class JsonReaderTests
     {
+        private const string jsonInvalid =
+            """
+            {
+                "a":::::::,,,,,,
+            }
+            """;
 
-        private readonly string jsonSmallObject = """{"a": 12,"b": 12,"c": 12}""";
+        private const string jsonUnbalancedObject =
+            """
+            {
+                "a": 12,
+                "b": 12,
+                "c": 12
+            """;
 
-        private readonly string jsonSmallArray = """[12,12,12]""";
+        private const string jsonUnbalancedArray =
+            """
+            [10,20,30
+            """;
 
-        private readonly string jsonArray =
+        private const string jsonSmallObject = 
+            """
+                                                                                                {
+                "a": 12,
+                "b": 12,
+                "c": 12
+            }
+            """;
+
+        private const string jsonSmallArray = """[12,12,12]""";
+
+        private const string jsonArray =
             """
             [{
                 "Date": "2019-08-01T00:00:00-07:00",
@@ -35,6 +62,73 @@ namespace Tests
             }]
             """;
 
+        private readonly ITestOutputHelper output;
+
+        public JsonReaderTests(ITestOutputHelper output)
+        {
+            this.output = output;
+        }
+
+        [Fact]
+        public void LargeTokenGap_ShouldThrow()
+        {
+            var largeGapJson = $"{{ \"a\": {new String(' ', 2 * 1024 * 1024)}10 }}";
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(largeGapJson));
+            var jsonReader = new JsonReader(stream, 10);
+
+            Assert.ThrowsAny<JsonException>(() =>
+            {
+                foreach(var v in jsonReader.Read())
+                {
+                    output.WriteLine($"{v.TokenType}");
+                }
+            });
+        }
+
+        [Fact]
+        public void InvalidJson_ShouldThrow()
+        {
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonInvalid));
+            var jsonReader = new JsonReader(stream, 10);
+
+            Assert.ThrowsAny<JsonException>(() =>
+            {
+                foreach(var v in jsonReader.Read())
+                {
+                    output.WriteLine($"{v.TokenType}");
+                }
+            });
+        }
+
+        [Fact]
+        public void UnbalancedObject_ShouldThrow()
+        {
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonUnbalancedObject));
+            var jsonReader = new JsonReader(stream, 10);
+
+            var x = Assert.ThrowsAny<JsonException>(() =>
+            {
+                foreach(var v in jsonReader.Read())
+                {
+                    output.WriteLine($"{v.TokenType}");
+                }
+            });
+        }
+
+        [Fact]
+        public void UnbalancedArray_ShouldThrow()
+        {
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonUnbalancedArray));
+            var jsonReader = new JsonReader(stream, 10);
+
+            Assert.ThrowsAny<JsonException>(() =>
+            {
+                foreach(var v in jsonReader.Read())
+                {
+                    output.WriteLine($"{v.TokenType}");
+                }
+            });
+        }
 
         [Fact]
         public void SmallObject_ShouldContainsAllTokens()
