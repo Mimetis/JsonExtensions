@@ -78,7 +78,7 @@ namespace Tests
 
             Assert.ThrowsAny<JsonException>(() =>
             {
-                foreach(var v in jsonReader.Read())
+                foreach(var v in jsonReader.Values())
                 {
                     output.WriteLine($"{v.TokenType}");
                 }
@@ -93,7 +93,7 @@ namespace Tests
 
             Assert.ThrowsAny<JsonException>(() =>
             {
-                foreach(var v in jsonReader.Read())
+                foreach(var v in jsonReader.Values())
                 {
                     output.WriteLine($"{v.TokenType}");
                 }
@@ -108,7 +108,7 @@ namespace Tests
 
             var x = Assert.ThrowsAny<JsonException>(() =>
             {
-                foreach(var v in jsonReader.Read())
+                foreach(var v in jsonReader.Values())
                 {
                     output.WriteLine($"{v.TokenType}");
                 }
@@ -123,7 +123,7 @@ namespace Tests
 
             Assert.ThrowsAny<JsonException>(() =>
             {
-                foreach(var v in jsonReader.Read())
+                foreach(var v in jsonReader.Values())
                 {
                     output.WriteLine($"{v.TokenType}");
                 }
@@ -135,7 +135,7 @@ namespace Tests
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonSmallObject));
             var jsonReader = new JsonReader(stream, 10);
-            var tokens = jsonReader.Read().Select(x => x.TokenType).ToList();
+            var tokens = jsonReader.Values().Select(x => x.TokenType).ToList();
 
             Assert.Equal([
                 JsonTokenType.StartObject,
@@ -154,7 +154,7 @@ namespace Tests
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonSmallArray));
             var jsonReader = new JsonReader(stream, 10);
-            var tokens = jsonReader.Read().Select(x => x.TokenType).ToList();
+            var tokens = jsonReader.Values().Select(x => x.TokenType).ToList();
 
             Assert.Equal([
                 JsonTokenType.StartArray,
@@ -171,7 +171,7 @@ namespace Tests
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonArray));
             var jsonReader = new JsonReader(stream, 10);
-            var tokens = jsonReader.Read().Where(x => x.TokenType == JsonTokenType.String).Select(v => v.Value.ToString()).ToList();
+            var tokens = jsonReader.Values().Where(x => x.TokenType == JsonTokenType.String).Select(v => v.Value.ToString()).ToList();
 
             Assert.Equal(["2019-08-01T00:00:00-07:00", "Hot", "2019-08-01T00:00:00-07:00", "Hot"], tokens);
         }
@@ -181,7 +181,7 @@ namespace Tests
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonArray));
             var jsonReader = new JsonReader(stream, 10);
-            var tokens = jsonReader.Read().Where(x => x.TokenType == JsonTokenType.Number).Select(v => v.Value.Deserialize<double>()).ToList();
+            var tokens = jsonReader.Values().Where(x => x.TokenType == JsonTokenType.Number).Select(v => v.Value.Deserialize<double>()).ToList();
 
             Assert.Equal([25, 20, -10.5, 60, 20, 25, 20, -10, 60, 20], tokens);
         }
@@ -191,7 +191,7 @@ namespace Tests
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonArray));
             var jsonReader = new JsonReader(stream, 10);
-            var tokens = jsonReader.Read().Where(x => x.TokenType == JsonTokenType.False || x.TokenType == JsonTokenType.True).Select(v => v.Value.Deserialize<bool>()).ToList();
+            var tokens = jsonReader.Values().Where(x => x.TokenType == JsonTokenType.False || x.TokenType == JsonTokenType.True).Select(v => v.Value.Deserialize<bool>()).ToList();
 
             Assert.Equal([true, false], tokens);
         }
