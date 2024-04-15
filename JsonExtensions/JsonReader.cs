@@ -78,7 +78,7 @@ namespace JsonExtensions
         /// <summary>
         /// Current value
         /// </summary>
-        public JsonReaderValue? Current { get; private set; }
+        public JsonReaderValue Current { get; private set; }
 
         /// <summary>
         /// Read the next value. Can be any TokenType
@@ -178,17 +178,13 @@ namespace JsonExtensions
         {
             while (this.Read())
             {
-                if (this.Current != null)
-                    yield return this.Current;
+                yield return this.Current;
             }
         }
 
 
         public bool Skip()
         {
-            if (this.Current == null)
-                return false;
-
             if (this.Current.TokenType == JsonTokenType.PropertyName)
                 return (this.Read());
 
@@ -242,7 +238,6 @@ namespace JsonExtensions
                         Array.Clear(this.buffer);
                         this.buffer = null;
                     }
-                    this.Current = null;
                 }
 
                 // TODO: free unmanaged resources (unmanaged objects) and override finalizer
@@ -260,21 +255,20 @@ namespace JsonExtensions
 
         public override string ToString()
         {
-
-            if (this.Current == null)
-                return base.ToString();
-
             return this.Current.ToString();
         }
 
     }
 
-    public class JsonReaderValue
+    public struct JsonReaderValue
     {
-        public string? Name { get; set; }
+        
+        public string Name { get; set; } = string.Empty;
         public JsonValue? Value { get; set; }
-        public JsonTokenType TokenType { get; set; }
-        public int Depth { get; set; }
+        public JsonTokenType TokenType { get; set; } = JsonTokenType.None;
+        public int Depth { get; set; } = 0;
+
+        public JsonReaderValue() { }
 
         public override string ToString()
         {
