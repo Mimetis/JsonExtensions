@@ -10,21 +10,10 @@ namespace ConsoleJsonSample
         // to be sure we can call the JsonReader.Read() method from an async scope
         static async Task Main(string[] args)
         {
-            var jsonReader = new JsonReader(GetSmallMemoryStream(), 1024); // test 10 to see buffer increase in debug console
+            var jsonReader = new JsonReader(GetMemoryStream(), 1024); // test 10 to see buffer increase in debug console
 
-            foreach (var prop in jsonReader.Values())
-            {
-                if (prop.TokenType == JsonTokenType.StartObject || prop.TokenType == JsonTokenType.StartArray || prop.TokenType == JsonTokenType.EndObject || prop.TokenType == JsonTokenType.EndArray)
-                    Console.WriteLine($"- ({prop.TokenType})");
-                else if (prop.TokenType == JsonTokenType.PropertyName)
-                    Console.WriteLine($"Property: {prop.Name}");
-                else
-                    Console.WriteLine($"Value: {prop.Value}");
-            }
-
-            //while (jsonReader.Read())
+            //foreach (var prop in jsonReader.Values())
             //{
-            //    var prop = jsonReader.Current;
             //    if (prop.TokenType == JsonTokenType.StartObject || prop.TokenType == JsonTokenType.StartArray || prop.TokenType == JsonTokenType.EndObject || prop.TokenType == JsonTokenType.EndArray)
             //        Console.WriteLine($"- ({prop.TokenType})");
             //    else if (prop.TokenType == JsonTokenType.PropertyName)
@@ -32,6 +21,23 @@ namespace ConsoleJsonSample
             //    else
             //        Console.WriteLine($"Value: {prop.Value}");
             //}
+
+            while (jsonReader.Read())
+            {
+
+                if (jsonReader.Current.TokenType == JsonTokenType.PropertyName)
+                {
+                    var prop = jsonReader.Current.Name;
+                    jsonReader.Skip();
+                    var value = jsonReader.Current.Value;
+                    Console.WriteLine($"{prop}: {value}");
+                }
+            }
+
+            while (jsonReader.Read())
+            {
+                Console.WriteLine(jsonReader);
+            }
         }
 
 

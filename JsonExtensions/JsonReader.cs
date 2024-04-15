@@ -69,12 +69,10 @@ namespace JsonExtensions
         // bytes consumed by Utf8JsonReader each time it reads a token
         private int bytesConsumed;
 
-        // token found in the current buffer
-        private bool foundToken;
-
+        // more tokens to be found
+        private bool hasMore;
 
         private bool disposedValue;
-
 
 
         /// <summary>
@@ -92,12 +90,16 @@ namespace JsonExtensions
             if (this.buffer == null)
                 throw new ArgumentNullException(nameof(this.buffer));
 
+            // if we don't have any more bytes and in final block, we can exit
+            if (this.dataLen <= 0 && this.isFinalBlock)
+                return false;
+
             bool foundToken = false;
 
             while (!foundToken)
             {
                 // at this point, if there's already any data in the buffer, it has been shifted to start at index 0
-                if (this.dataLen < this.buffer.Length && !this.isFinalBlock && !this.foundToken)
+                if (this.dataLen < this.buffer.Length && !this.isFinalBlock && !this.hasMore)
                 {
                     // there's space left in the buffer, try to fill it with new data
                     int todo = this.buffer.Length - this.dataLen;
@@ -126,10 +128,16 @@ namespace JsonExtensions
                     this.currentState = reader.CurrentState;
                     this.bytesConsumed = (int)reader.BytesConsumed;
                     this.tokensFound++;
-                    this.foundToken = true;
+                    this.hasMore = true;
                     this.Current = GetValue(ref reader);
+                    Debug.WriteLine(this);
                     return true;
                 }
+
+
+                // if we don't have any more bytes and in final block, we can exit
+                if (this.dataLen <= 0 && this.isFinalBlock)
+                    break;
 
                 if (!this.isFinalBlock)
                 {
@@ -149,6 +157,8 @@ namespace JsonExtensions
 
                         Array.Resize(ref this.buffer, this.buffer.Length * 2);
                     }
+
+                    this.hasMore = false;
                 }
                 else
                 {
@@ -158,7 +168,6 @@ namespace JsonExtensions
             }
 
             return false;
-
         }
 
         /// <summary>
@@ -174,13 +183,39 @@ namespace JsonExtensions
             }
         }
 
+
+        public bool Skip()
+        {
+            if (this.Current == null)
+                return false;
+
+            if (this.Current.TokenType == JsonTokenType.PropertyName)
+                return (this.Read());
+
+            if (this.Current.TokenType == JsonTokenType.StartObject || this.Current.TokenType == JsonTokenType.StartArray)
+            {
+                int depth = this.Current.Depth;
+                do
+                {
+                    bool hasRead = this.Read();
+
+                    if (!hasRead)
+                        return false;
+                }
+                while (depth < this.Current.Depth);
+
+                return true;
+            }
+            return false;
+        }
+
         private static JsonReaderValue GetValue(ref Utf8JsonReader reader)
         {
             if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray or JsonTokenType.EndObject or JsonTokenType.EndArray)
-                return new JsonReaderValue { TokenType = reader.TokenType };
+                return new JsonReaderValue { TokenType = reader.TokenType, Depth = reader.CurrentDepth };
 
             if (reader.TokenType == JsonTokenType.PropertyName)
-                return new JsonReaderValue { TokenType = reader.TokenType, Name = reader.GetString() };
+                return new JsonReaderValue { TokenType = reader.TokenType, Name = reader.GetString(), Depth = reader.CurrentDepth };
 
             JsonValue? propertyValue = null;
             if (reader.TokenType == JsonTokenType.Null || reader.TokenType == JsonTokenType.None)
@@ -192,7 +227,7 @@ namespace JsonExtensions
             else if (reader.TokenType == JsonTokenType.Number)
                 propertyValue = JsonValue.Create(reader.GetDouble());
 
-            return new JsonReaderValue { Value = propertyValue, TokenType = reader.TokenType };
+            return new JsonReaderValue { Value = propertyValue, TokenType = reader.TokenType, Depth = reader.CurrentDepth };
 
         }
 
@@ -222,6 +257,16 @@ namespace JsonExtensions
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
         }
+
+        public override string ToString()
+        {
+
+            if (this.Current == null)
+                return base.ToString();
+
+            return this.Current.ToString();
+        }
+
     }
 
     public class JsonReaderValue
@@ -229,5 +274,19 @@ namespace JsonExtensions
         public string? Name { get; set; }
         public JsonValue? Value { get; set; }
         public JsonTokenType TokenType { get; set; }
+        public int Depth { get; set; }
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder($"Type: {this.TokenType} - Depth: {this.Depth}");
+
+            if (this.TokenType == JsonTokenType.PropertyName)
+                sb.Append($" - Property: {this.Name}");
+
+            if (this.Value != null)
+                sb.Append($" - Value: {this.Value}");
+
+            return sb.ToString();
+        }
     }
 }
