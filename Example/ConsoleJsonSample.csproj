@@ -1,23 +1,29 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+	<PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
-  </ItemGroup>
+		<TargetFrameworkNetCore>netcoreapp3.1</TargetFrameworkNetCore>
+		<TargetFrameworkNet6>net6.0</TargetFrameworkNet6>
+		<TargetFrameworkNet8>net8.0</TargetFrameworkNet8>
+		<TargetFrameworks>$(TargetFrameworkNetCore);$(TargetFrameworkNet6);$(TargetFrameworkNet8)</TargetFrameworks>
+		<LangVersion>12.0</LangVersion>
 
-  <ItemGroup>
-    <ProjectReference Include="..\JsonExtensions\JsonExtensions.csproj" />
-  </ItemGroup>
+		<OutputType>Exe</OutputType>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <None Update="Address.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\JsonExtensions\JsonExtensions.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="Address.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
 
 </Project>

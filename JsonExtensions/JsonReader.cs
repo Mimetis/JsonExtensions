@@ -1,14 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Reflection.PortableExecutable;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization.Metadata;
-using System.Threading.Tasks;
 
 namespace JsonExtensions
 {
@@ -105,7 +97,7 @@ namespace JsonExtensions
                     int todo = this.buffer.Length - this.dataLen;
                     int done = this.Stream.Read(this.buffer, this.dataLen, todo);
                     this.dataLen += done;
-                    this.isFinalBlock = (done < todo);
+                    this.isFinalBlock = done < todo;
                     this.bytesConsumed = 0;
                     this.tokensFound = 0;
                 }
@@ -185,7 +177,7 @@ namespace JsonExtensions
         public bool Skip()
         {
             if (this.Current.TokenType == JsonTokenType.PropertyName)
-                return (this.Read());
+                return this.Read();
 
             if (this.Current.TokenType == JsonTokenType.StartObject || this.Current.TokenType == JsonTokenType.StartArray)
             {
@@ -228,27 +220,31 @@ namespace JsonExtensions
 
         protected virtual void Dispose(bool disposing)
         {
-            if (!disposedValue)
+            if (!this.disposedValue)
             {
                 if (disposing)
                 {
                     if (this.buffer != null)
                     {
+#if NET6_0_OR_GREATER
                         Array.Clear(this.buffer);
+#else
+                        Array.Clear(this.buffer, 0, this.buffer.Length);
+#endif
                         this.buffer = null;
                     }
                 }
 
                 // TODO: free unmanaged resources (unmanaged objects) and override finalizer
                 // TODO: set large fields to null
-                disposedValue = true;
+                this.disposedValue = true;
             }
         }
 
         public void Dispose()
         {
             // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-            Dispose(disposing: true);
+            this.Dispose(disposing: true);
             GC.SuppressFinalize(this);
         }
 
@@ -261,8 +257,8 @@ namespace JsonExtensions
 
     public struct JsonReaderValue
     {
-        
-        public string Name { get; set; } = string.Empty;
+
+        public string? Name { get; set; } = string.Empty;
         public JsonValue? Value { get; set; }
         public JsonTokenType TokenType { get; set; } = JsonTokenType.None;
         public int Depth { get; set; } = 0;
