@@ -1,4 +1,5 @@
 using JsonExtensions;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Xunit.Abstractions;
@@ -74,7 +75,7 @@ namespace Tests
         {
             var largeGapJson = $"{{ \"a\": {new String(' ', 2 * 1024 * 1024)}10 }}";
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(largeGapJson));
-            var jsonReader = new JsonReader(stream, 10);
+            var jsonReader = new JsonReader(stream, bufferSize:10);
 
             jsonReader.Read();
             jsonReader.Read();
@@ -87,7 +88,7 @@ namespace Tests
         public void InvalidJson_ShouldThrow()
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonInvalid));
-            var jsonReader = new JsonReader(stream, 10);
+            var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
             jsonReader.Read();
@@ -101,7 +102,7 @@ namespace Tests
         public void UnbalancedObject_ShouldThrow()
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonUnbalancedObject));
-            var jsonReader = new JsonReader(stream, 10);
+            var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
 
@@ -119,7 +120,7 @@ namespace Tests
         public void UnbalancedArray_ShouldThrow()
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonUnbalancedArray));
-            var jsonReader = new JsonReader(stream, 10);
+            var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
 
@@ -134,24 +135,24 @@ namespace Tests
         public void SmallObject_ShouldContainsAllTokens()
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonSmallObject));
-            var jsonReader = new JsonReader(stream, 10);
+            var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.StartObject, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.StartObject, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.PropertyName, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.PropertyName, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.Number, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.Number, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.PropertyName, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.PropertyName, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.Number, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.Number, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.PropertyName, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.PropertyName, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.Number, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.Number, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.EndObject, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.EndObject, jsonReader.TokenType);
 
         }
 
@@ -159,18 +160,18 @@ namespace Tests
         public void SmallArray_ShouldContainsAllTokens()
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonSmallArray));
-            var jsonReader = new JsonReader(stream, 10);
+            var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.StartArray, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.StartArray, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.Number, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.Number, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.Number, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.Number, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.Number, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.Number, jsonReader.TokenType);
             jsonReader.Read();
-            Assert.Equal(JsonTokenType.EndArray, jsonReader.Current.TokenType);
+            Assert.Equal(JsonTokenType.EndArray, jsonReader.TokenType);
         }
 
 
@@ -178,15 +179,19 @@ namespace Tests
         public void JsonArray_ShouldContainsValidStringTypes()
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonArray));
-            var jsonReader = new JsonReader(stream, 10);
+            var jsonReader = new JsonReader(stream, bufferSize: 10);
 
-            do { jsonReader.Read(); } while (jsonReader.Current.Name != "Date");
-            jsonReader.Skip();
-            Assert.Equal("2019-08-01T00:00:00-07:00", jsonReader.Current.Value?.GetValue<string>());
+            // first method: Using Read() the GetString()
+            do { jsonReader.Read(); } while (jsonReader.TokenType != JsonTokenType.PropertyName && jsonReader.GetString() != "Date");
+            var tmp = jsonReader.ReadAsString();
+            Assert.Equal("2019-08-01T00:00:00-07:00", tmp);
 
-            do { jsonReader.Read(); } while (jsonReader.Current.Name != "Summary");
+            // second method: Using ReadAsString() method
+            while (jsonReader.Read() && (jsonReader.TokenType != JsonTokenType.PropertyName || jsonReader.GetString() != "Summary")) { };
+
+            // skip to value and use GetAsString()
             jsonReader.Skip();
-            Assert.Equal("Hot", jsonReader.Current.Value?.GetValue<string>());
+            Assert.Equal("Hot", jsonReader.GetString());
         }
 
 
@@ -195,16 +200,24 @@ namespace Tests
         public void JsonArray_ShouldContainsValidBooleans()
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonArray));
-            var jsonReader = new JsonReader(stream, 10);
+            var jsonReader = new JsonReader(stream, bufferSize: 10);
 
-            // select a token
-            jsonReader.Values().First(jr => jr.Name == "IsHot");
+            // select first token
+            jsonReader.Values().First(jr => jr.Value?.ToString() == "IsHot");
 
             // skip to value
             jsonReader.Skip();
 
             // asert Current
-            Assert.Equal(true, jsonReader.Current.Value?.GetValue<Boolean>());
+            Assert.True(jsonReader.GetBoolean());
+
+            // select next token
+            jsonReader.Values().First(jr => jr.Value?.ToString() == "IsHot");
+
+            // asert Current
+            Assert.False(jsonReader.ReadAsBoolean());
+
+
         }
 
     }
