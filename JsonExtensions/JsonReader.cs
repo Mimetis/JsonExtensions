@@ -1,20 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Buffers;
+using System.Buffers.Text;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization.Metadata;
-using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 namespace JsonExtensions
 {
 
-    public class JsonReader
+    public class JsonReader : IDisposable
     {
+
+        // encoding used to convert bytes to string
+        private static readonly UTF8Encoding utf8Encoding = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
         /// <summary>
         /// Stream to read
         /// </summary>
@@ -31,7 +31,7 @@ namespace JsonExtensions
         /// <param name="stream">Stream to read</param>
         /// <param name="bufferSize">buffer size. will adapt if needed</param>
         /// <exception cref="Exception">If stream is not readable</exception>
-        public JsonReader(Stream stream, int bufferSize = 1024, JsonReaderOptions jsonReaderOptions = default)
+        public JsonReader(Stream stream, JsonReaderOptions jsonReaderOptions = default, int bufferSize = 1024)
         {
             this.Stream = stream;
             this.bufferSize = bufferSize;
@@ -39,127 +39,468 @@ namespace JsonExtensions
 
             if (!this.Stream.CanRead)
                 throw new Exception("Stream is not readable");
+
+            // create a buffer to read the stream into
+            this.buffer = new byte[bufferSize];
+            this.dataLen = 0;
+            this.dataPos = 0;
+            this.isFinalBlock = false;
+            this.currentState = new JsonReaderState(jsonReaderOptions);
+            this.tokensFound = 0;
+            this.bytesConsumed = 0;
         }
 
+        // buffer used by Utf8JsonReader to read values
+        private byte[]? buffer;
+
+        private int dataLen;
+        private int dataPos;
+
+        // number of tokens found in the buffer.
+        // if this is 0, it means we need to read more data from the stream
+        private int tokensFound;
+
+        // if this is true, it means we have reached the end of the stream
+        private bool isFinalBlock;
+
+        // state object used internally by Utf8JsonReader
+        private JsonReaderState currentState;
+        private JsonReaderState prevState;
+
+        // bytes consumed by Utf8JsonReader each time it reads a token
+        private int bytesConsumed;
+
+        // more tokens to be found
+        private bool hasMore;
+
+        private bool disposedValue;
+
+
+        ///// <summary>
+        ///// Current value
+        ///// </summary>
+        //public JsonReaderValue Current { get; private set; }
+
+        /// <summary>
+        /// Gets the token value. Can be a value or a property name
+        /// </summary>
+        public ReadOnlyMemory<byte> Value { get; private set; }
+
+        /// <summary>
+        /// Gets the token type
+        /// </summary>
+        public JsonTokenType TokenType { get; private set; } = JsonTokenType.None;
+
+        /// <summary>
+        /// Gets the current depth
+        /// </summary>
+        public int Depth { get; private set; } = 0;
+
+
+
+        /// <summary>
+        /// Read the next value. Can be any TokenType
+        /// </summary>
+        /// <returns>true if a token has been read otherwise false</returns>
+        /// <exception cref="JsonException"></exception>
+        public bool Read()
+        {
+            if (this.buffer == null)
+                throw new ArgumentNullException(nameof(this.buffer));
+
+            // if we don't have any more bytes and in final block, we can exit
+            if (this.dataLen <= 0 && this.isFinalBlock)
+                return false;
+
+            bool foundToken = false;
+
+            while (!foundToken)
+            {
+                // at this point, if there's already any data in the buffer, it has been shifted to start at index 0
+                if (this.dataLen < this.buffer.Length && !this.isFinalBlock && !this.hasMore)
+                {
+                    // there's space left in the buffer, try to fill it with new data
+                    int todo = this.buffer.Length - this.dataLen;
+                    int done = this.Stream.Read(this.buffer, this.dataLen, todo);
+                    this.dataLen += done;
+                    this.isFinalBlock = done < todo;
+                    this.bytesConsumed = 0;
+                    this.tokensFound = 0;
+                }
+
+                this.dataPos += this.bytesConsumed;
+                this.dataLen -= this.bytesConsumed;
+
+                // create a new ref struct json reader
+                var spanBuffer = new ReadOnlySpan<byte>(this.buffer, this.dataPos, this.dataLen);
+                // Trace.WriteLine($"span starting from {dataPos} : {BitConverter.ToString(spanBuffer.ToArray())}");
+
+                var reader = new Utf8JsonReader(spanBuffer, this.isFinalBlock, state: this.currentState);
+
+                // try to read nex token
+                foundToken = reader.Read();
+
+                // we have a valid token
+                if (foundToken)
+                {
+                    this.currentState = reader.CurrentState;
+                    this.bytesConsumed = (int)reader.BytesConsumed;
+                    this.tokensFound++;
+                    this.hasMore = true;
+                    this.TokenType = reader.TokenType;
+                    this.Depth = reader.CurrentDepth;
+                    this.Value = new ReadOnlyMemory<byte>(reader.ValueSpan.ToArray());
+                    return true;
+                }
+
+                // if we don't have any more bytes and in final block, we can exit
+                if (this.dataLen <= 0 && this.isFinalBlock)
+                    break;
+
+                if (!this.isFinalBlock)
+                {
+                    // regardless if we found tokens or not, there may be data for a partial token remaining at the end.
+                    if (this.dataPos > 0)
+                    {
+                        // Shift partial token data to the start of the buffer
+                        Array.Copy(this.buffer, this.dataPos, this.buffer, 0, this.dataLen);
+                        this.dataPos = 0;
+                    }
+
+                    if (this.tokensFound == 0)
+                    {
+                        // we didn't find any tokens in the current buffer, so it needs to expand.
+                        if (this.buffer.Length > MaxTokenGap)
+                            throw new JsonException($"sanity check on input stream failed, json token gap of more than {MaxTokenGap} bytes");
+
+                        Array.Resize(ref this.buffer, this.buffer.Length * 2);
+                    }
+
+                    this.hasMore = false;
+                }
+                else
+                {
+                    foundToken = false;
+                }
+            }
+            return false;
+        }
 
         /// <summary>
         /// Enumerate over the stream and read the properties
         /// </summary>
         /// <returns></returns>
-        public IEnumerable<JsonReaderValue> Read()
+        public IEnumerable<JsonReaderValue> Values()
         {
-            // state shared accross all instances of Utf8JsonReader
-            var currentState = new JsonReaderState(jsonReaderOptions);
-
-            // create a buffer to read the stream into
-            var buffer = new byte[bufferSize];
-            int dataLen = 0;
-            bool isFinalBlock = false;
-
-            while(!isFinalBlock)
+            while (this.Read())
             {
-                // at this point, if there's already any data in the buffer, it has been shifted to start at index 0
+                JsonReaderValue jsonReaderValue = new() { TokenType = this.TokenType, Depth = this.Depth };
+                if (this.TokenType == JsonTokenType.PropertyName)
+                    jsonReaderValue.Value = JsonValue.Create(this.GetString());
+                else if (this.TokenType == JsonTokenType.Null || this.TokenType == JsonTokenType.None)
+                    jsonReaderValue.Value = null;
+                else if (this.TokenType == JsonTokenType.String)
+                    jsonReaderValue.Value = JsonValue.Create(this.GetString());
+                else if (this.TokenType == JsonTokenType.False || this.TokenType == JsonTokenType.True)
+                    jsonReaderValue.Value = JsonValue.Create(this.GetBoolean());
+                else if (this.TokenType == JsonTokenType.Number)
+                    jsonReaderValue.Value = JsonValue.Create(this.GetDouble());
 
-                if(dataLen < buffer.Length)
-                {
-                    // there's space left in the buffer, try to fill it with new data
-                    int todo = buffer.Length - dataLen;
-                    int done = Stream.Read(buffer, dataLen, todo);
-                    dataLen += done;
-                    isFinalBlock = (done < todo);
-                }
-
-                bool foundToken;
-                int tokensFound = 0;
-                int dataPos = 0;
-
-                do
-                {
-                    // create a new ref struct json reader
-                    var spanBuffer = new ReadOnlySpan<byte>(buffer,dataPos,dataLen);
-                    // Trace.WriteLine($"span starting from {dataPos} : {BitConverter.ToString(spanBuffer.ToArray())}");
-
-                    var reader = new Utf8JsonReader(spanBuffer, isFinalBlock, state: currentState);
-
-                    if(InnerTryRead(ref reader, out var jsonProperty))
-                    {
-                        foundToken = true;
-                        currentState = reader.CurrentState;
-                        dataPos += (int)reader.BytesConsumed;
-                        dataLen -= (int)reader.BytesConsumed;
-                        tokensFound++;
-                        yield return jsonProperty!;
-                    }
-                    else
-                    {
-                        foundToken = false;
-                    }
-                } while(foundToken);
-
-                if(!isFinalBlock)
-                {
-                    // regardless if we found tokens or not, there may be data for a partial token remaining at the end.
-                    if(dataPos > 0)
-                    {
-                        // Shift partial token data to the start of the buffer
-                        Array.Copy(buffer, dataPos, buffer, 0, dataLen);
-                    }
-
-                    if(tokensFound == 0)
-                    {
-                        // we didn't find any tokens in the current buffer, so it needs to expand.
-                        if(buffer.Length > MaxTokenGap)
-                        {
-                            throw new JsonException($"sanity check on input stream failed, json token gap of more than {MaxTokenGap} bytes");
-                        }
-                        Array.Resize(ref buffer, buffer.Length * 2);
-                    }
-                }
+                yield return jsonReaderValue;
             }
         }
 
         /// <summary>
-        /// Try to read the next token from the buffer
+        /// Skips the children of the current token.
         /// </summary>
-        private static bool InnerTryRead(ref Utf8JsonReader reader, out JsonReaderValue? value)
+        public bool Skip()
         {
-            if (!reader.Read())
-            {
-                value = null;
-                return false;
-            }
+            if (this.TokenType == JsonTokenType.PropertyName)
+                return this.Read();
 
-            if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray or JsonTokenType.EndObject or JsonTokenType.EndArray)
+            if (this.TokenType == JsonTokenType.StartObject || this.TokenType == JsonTokenType.StartArray)
             {
-                value = new JsonReaderValue { TokenType = reader.TokenType };
+                int depth = this.Depth;
+                do
+                {
+                    bool hasRead = this.Read();
+
+                    if (!hasRead)
+                        return false;
+                }
+                while (depth < this.Depth);
+
                 return true;
             }
-
-            if (reader.TokenType == JsonTokenType.PropertyName)
-            {
-                value = new JsonReaderValue { TokenType = reader.TokenType, Name = reader.GetString() };
-                return true;
-            }
-
-            JsonValue? propertyValue = null;
-            if (reader.TokenType == JsonTokenType.Null || reader.TokenType == JsonTokenType.None)
-                propertyValue = null;
-            else if (reader.TokenType == JsonTokenType.String)
-                propertyValue = JsonValue.Create(reader.GetString());
-            else if (reader.TokenType == JsonTokenType.False || reader.TokenType == JsonTokenType.True)
-                propertyValue = JsonValue.Create(reader.GetBoolean());
-            else if (reader.TokenType == JsonTokenType.Number)
-                propertyValue = JsonValue.Create(reader.GetDouble());
-
-            value = new JsonReaderValue { Value = propertyValue, TokenType = reader.TokenType };
-            return true;
+            return false;
         }
+
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!this.disposedValue)
+            {
+                if (disposing)
+                {
+                    if (this.buffer != null)
+                    {
+#if NET6_0_OR_GREATER
+                        Array.Clear(this.buffer);
+#else
+                        Array.Clear(this.buffer, 0, this.buffer.Length);
+#endif
+                        this.buffer = null;
+                    }
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+                // TODO: set large fields to null
+                this.disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            this.Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+
+
+        public string? ReadAsString()
+        {
+            this.Read();
+            return this.GetString();
+        }
+        public string? GetString()
+        {
+            if (this.TokenType != JsonTokenType.PropertyName && this.TokenType != JsonTokenType.String)
+                return null;
+
+            var str = utf8Encoding.GetString(this.Value.ToArray());
+
+            return Regex.Unescape(str);
+        }
+        public string? ReadAsEscapedString()
+        {
+            this.Read();
+            return this.GetEscapedString();
+        }
+        public string? GetEscapedString()
+        {
+            if (this.TokenType != JsonTokenType.PropertyName && this.TokenType != JsonTokenType.String)
+                return null;
+
+            var str = utf8Encoding.GetString(this.Value.ToArray());
+
+            return str;
+        }
+        public Guid? ReadAsGuid()
+        {
+            this.Read();
+            return this.GetGuid();
+        }
+        public Guid? GetGuid()
+        {
+            if (this.TokenType != JsonTokenType.String)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out Guid tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse double");
+        }
+        public TimeSpan? ReadAsTimeSpan()
+        {
+            this.Read();
+            return this.GetTimeSpan();
+        }
+        public TimeSpan? GetTimeSpan()
+        {
+            if (this.TokenType != JsonTokenType.String)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out TimeSpan tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse TimeSpan");
+        }
+        public DateTimeOffset? ReadAsDateTimeOffset()
+        {
+            this.Read();
+            return this.GetDateTimeOffset();
+        }
+        public DateTimeOffset? GetDateTimeOffset()
+        {
+            if (this.TokenType != JsonTokenType.String)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out DateTimeOffset tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse DateTimeOffset");
+        }
+        public DateTime? ReadAsDateTime()
+        {
+            this.Read();
+            return this.GetDateTime();
+        }
+        public DateTime? GetDateTime()
+        {
+            if (this.TokenType != JsonTokenType.String)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out DateTime tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse GetDateTime");
+        }
+        public double? ReadAsDouble()
+        {
+            this.Read();
+            return this.GetDouble();
+        }
+        public double? GetDouble()
+        {
+            if (this.TokenType != JsonTokenType.Number)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out double tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse double");
+        }
+        public decimal? ReadAsDecimal()
+        {
+            this.Read();
+            return this.GetDecimal();
+        }
+        public decimal? GetDecimal()
+        {
+            if (this.TokenType != JsonTokenType.Number)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out decimal tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse decimal");
+        }
+        public float? ReadAsSingle()
+        {
+            this.Read();
+            return this.GetSingle();
+        }
+        public float? GetSingle()
+        {
+            if (this.TokenType != JsonTokenType.Number)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out float tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse float");
+        }
+        public long? ReadAsInt64()
+        {
+            this.Read();
+            return this.GetInt64();
+        }
+        public long? GetInt64()
+        {
+            if (this.TokenType != JsonTokenType.Number)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out long tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse long");
+        }
+        public int? ReadAsInt32()
+        {
+            this.Read();
+            return this.GetInt32();
+        }
+        public int? GetInt32()
+        {
+            if (this.TokenType != JsonTokenType.Number)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out int tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse int");
+        }
+        public short? ReadAsInt16()
+        {
+            this.Read();
+            return this.GetInt16();
+        }
+        public short? GetInt16()
+        {
+            if (this.TokenType != JsonTokenType.Number)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out short tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse short");
+        }
+        public byte? ReadAsByte()
+        {
+            this.Read();
+            return this.GetByte();
+        }
+        public byte? GetByte()
+        {
+            if (this.TokenType != JsonTokenType.Number)
+                return null;
+
+            if (Utf8Parser.TryParse(this.Value.Span, out byte tmp, out int bytesConsumed) && this.Value.Span.Length == bytesConsumed)
+                return tmp;
+
+            throw new FormatException("Can't parse byte");
+        }
+        public bool? ReadAsBoolean()
+        {
+            this.Read();
+            return this.GetBoolean();
+        }
+        public bool? GetBoolean()
+        {
+            if (this.TokenType == JsonTokenType.True)
+                return true;
+            else if (this.TokenType == JsonTokenType.False)
+                return false;
+            else
+                return null;
+        }
+
+        //public byte[] GetBytesFromBase64()
+        //{
+        //    return null;
+        //}
+
     }
 
-    public class JsonReaderValue
+    public struct JsonReaderValue
     {
-        public string? Name { get; set; }
         public JsonValue? Value { get; set; }
-        public JsonTokenType TokenType { get; set; }
+        public JsonTokenType TokenType { get; set; } = JsonTokenType.None;
+        public int Depth { get; set; } = 0;
+
+        public JsonReaderValue() { }
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder($"Type: {this.TokenType} - Depth: {this.Depth}");
+
+            if (this.TokenType == JsonTokenType.PropertyName)
+                sb.Append($" - Property: {this.Value}");
+
+            if (this.Value != null)
+                sb.Append($" - Value: {this.Value}");
+
+            return sb.ToString();
+        }
     }
 }

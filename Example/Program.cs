@@ -1,4 +1,6 @@
-﻿using System.Text;
+﻿using System.Data;
+using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using JsonExtensions;
 
@@ -10,17 +12,34 @@ namespace ConsoleJsonSample
         // to be sure we can call the JsonReader.Read() method from an async scope
         static async Task Main(string[] args)
         {
-            var jsonReader = new JsonReader(GetFileStream(), 1024); // test 10 to see buffer increase in debug console
+            var jsonReader = new JsonReader(GetFileStream()); // test 10 to see buffer increase in debug console
 
-            foreach (var prop in jsonReader.Read())
+            while (jsonReader.Read())
             {
-                if (prop.TokenType == JsonTokenType.StartObject || prop.TokenType == JsonTokenType.StartArray || prop.TokenType == JsonTokenType.EndObject || prop.TokenType == JsonTokenType.EndArray)
-                    Console.WriteLine($"- ({prop.TokenType})");
-                else if (prop.TokenType == JsonTokenType.PropertyName)
-                    Console.WriteLine($"Property: {prop.Name}");
+                // write numbers of space for the current depth
+                var indent = new string(' ', jsonReader.Depth * 2);
+
+                if (jsonReader.TokenType == JsonTokenType.StartObject)
+                    Console.WriteLine($"{indent}{{");
+                else if (jsonReader.TokenType == JsonTokenType.EndObject)
+                    Console.WriteLine($"{indent}}}");
+                else if (jsonReader.TokenType == JsonTokenType.StartArray)
+                    Console.WriteLine($"{indent}[");
+                else if (jsonReader.TokenType == JsonTokenType.EndArray)
+                    Console.WriteLine($"{indent}]");
+                else if (jsonReader.TokenType == JsonTokenType.PropertyName)
+                    Console.Write($"{indent}{jsonReader.GetString()}:");
+                else if (jsonReader.TokenType == JsonTokenType.String)
+                    Console.WriteLine(jsonReader.GetString());
+                else if (jsonReader.TokenType == JsonTokenType.Number)
+                    Console.WriteLine(jsonReader.GetDouble());
+                else if (jsonReader.TokenType == JsonTokenType.True || jsonReader.TokenType == JsonTokenType.False)
+                    Console.WriteLine(jsonReader.GetBoolean());
                 else
-                    Console.WriteLine($"Value: {prop.Value}");
+                    Console.WriteLine();
+
             }
+
         }
 
 
@@ -29,6 +48,14 @@ namespace ConsoleJsonSample
             return new FileStream("Address.json", FileMode.Open);
         }
 
+
+        static MemoryStream GetSmallMemoryStream()
+        {
+            var jsonSmallArray = """[12]""";
+
+            byte[] bytes = Encoding.UTF8.GetBytes(jsonSmallArray);
+            return new MemoryStream(bytes);
+        }
         static MemoryStream GetMemoryStream()
         {
             var jsonString = @"[{
