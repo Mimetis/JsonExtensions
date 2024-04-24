@@ -8,10 +8,8 @@ using System.Text.RegularExpressions;
 
 namespace JsonExtensions
 {
-
     public class JsonReader : IDisposable
     {
-
         // encoding used to convert bytes to string
         private static readonly UTF8Encoding utf8Encoding = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
@@ -75,7 +73,6 @@ namespace JsonExtensions
 
         private bool disposedValue;
 
-
         ///// <summary>
         ///// Current value
         ///// </summary>
@@ -95,8 +92,6 @@ namespace JsonExtensions
         /// Gets the current depth
         /// </summary>
         public int Depth { get; private set; } = 0;
-
-
 
         /// <summary>
         /// Read the next value. Can be any TokenType
@@ -266,12 +261,12 @@ namespace JsonExtensions
             GC.SuppressFinalize(this);
         }
 
-
         public string? ReadAsString()
         {
             this.Read();
             return this.GetString();
         }
+
         public string? GetString()
         {
             if (this.TokenType != JsonTokenType.PropertyName && this.TokenType != JsonTokenType.String)
