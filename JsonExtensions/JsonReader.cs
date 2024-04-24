@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Buffers.Text;
 using System.Diagnostics;
 using System.Text;
@@ -485,7 +485,7 @@ namespace JsonExtensions
 
         public JsonReaderValue() { }
 
-        public override string ToString()
+        public override readonly string ToString()
         {
             var sb = new StringBuilder($"Type: {this.TokenType} - Depth: {this.Depth}");
 
