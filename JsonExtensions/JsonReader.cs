@@ -228,7 +228,6 @@ namespace JsonExtensions
             return false;
         }
 
-
         protected virtual void Dispose(bool disposing)
         {
             if (!this.disposedValue)
@@ -274,11 +273,13 @@ namespace JsonExtensions
 
             return Regex.Unescape(str);
         }
+
         public string? ReadAsEscapedString()
         {
             this.Read();
             return this.GetEscapedString();
         }
+
         public string? GetEscapedString()
         {
             if (this.TokenType != JsonTokenType.PropertyName && this.TokenType != JsonTokenType.String)
@@ -288,11 +289,13 @@ namespace JsonExtensions
 
             return str;
         }
+
         public Guid? ReadAsGuid()
         {
             this.Read();
             return this.GetGuid();
         }
+
         public Guid? GetGuid()
         {
             if (this.TokenType != JsonTokenType.String)
@@ -303,11 +306,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse double");
         }
+
         public TimeSpan? ReadAsTimeSpan()
         {
             this.Read();
             return this.GetTimeSpan();
         }
+
         public TimeSpan? GetTimeSpan()
         {
             if (this.TokenType != JsonTokenType.String)
@@ -318,11 +323,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse TimeSpan");
         }
+
         public DateTimeOffset? ReadAsDateTimeOffset()
         {
             this.Read();
             return this.GetDateTimeOffset();
         }
+
         public DateTimeOffset? GetDateTimeOffset()
         {
             if (this.TokenType != JsonTokenType.String)
@@ -333,11 +340,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse DateTimeOffset");
         }
+
         public DateTime? ReadAsDateTime()
         {
             this.Read();
             return this.GetDateTime();
         }
+
         public DateTime? GetDateTime()
         {
             if (this.TokenType != JsonTokenType.String)
@@ -348,11 +357,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse GetDateTime");
         }
+
         public double? ReadAsDouble()
         {
             this.Read();
             return this.GetDouble();
         }
+
         public double? GetDouble()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -363,11 +374,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse double");
         }
+
         public decimal? ReadAsDecimal()
         {
             this.Read();
             return this.GetDecimal();
         }
+
         public decimal? GetDecimal()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -378,11 +391,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse decimal");
         }
+
         public float? ReadAsSingle()
         {
             this.Read();
             return this.GetSingle();
         }
+
         public float? GetSingle()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -393,11 +408,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse float");
         }
+
         public long? ReadAsInt64()
         {
             this.Read();
             return this.GetInt64();
         }
+
         public long? GetInt64()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -408,11 +425,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse long");
         }
+
         public int? ReadAsInt32()
         {
             this.Read();
             return this.GetInt32();
         }
+
         public int? GetInt32()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -423,11 +442,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse int");
         }
+
         public short? ReadAsInt16()
         {
             this.Read();
             return this.GetInt16();
         }
+
         public short? GetInt16()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -438,11 +459,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse short");
         }
+
         public byte? ReadAsByte()
         {
             this.Read();
             return this.GetByte();
         }
+
         public byte? GetByte()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -453,11 +476,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse byte");
         }
+
         public bool? ReadAsBoolean()
         {
             this.Read();
             return this.GetBoolean();
         }
+
         public bool? GetBoolean()
         {
             if (this.TokenType == JsonTokenType.True)
@@ -472,7 +497,6 @@ namespace JsonExtensions
         //{
         //    return null;
         //}
-
     }
 
     public struct JsonReaderValue
