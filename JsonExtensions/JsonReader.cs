@@ -142,7 +142,14 @@ namespace JsonExtensions
                     this.hasMore = true;
                     this.TokenType = reader.TokenType;
                     this.Depth = reader.CurrentDepth;
-                    this.Value = new ReadOnlyMemory<byte>(reader.ValueSpan.ToArray());
+                    if (reader.TokenType == JsonTokenType.String || reader.TokenType == JsonTokenType.PropertyName)
+                    {
+                        this.Value = reader.ValueSpan.ToArray();
+                    }
+                    else
+                    {
+                        this.Value = new ReadOnlyMemory<byte>(this.buffer, this.dataPos + (int)reader.TokenStartIndex, reader.ValueSpan.Length);
+                    }
                     return true;
                 }
 
