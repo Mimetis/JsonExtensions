@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Text;
 using System.Text;
 using System.Text.Json;
@@ -15,6 +16,8 @@ namespace JsonExtensions
         /// </summary>
         public Stream Stream { get; }
 
+        private readonly bool sharedBuffer;
+        private readonly ArrayPool<byte> pool;
         private const int MaxTokenGap = 1024 * 1024;
 
         /// <summary>
@@ -23,15 +26,26 @@ namespace JsonExtensions
         /// <param name="stream">Stream to read</param>
         /// <param name="bufferSize">buffer size. will adapt if needed</param>
         /// <exception cref="Exception">If stream is not readable</exception>
-        public JsonReader(Stream stream, JsonReaderOptions jsonReaderOptions = default, int bufferSize = 1024)
+        public JsonReader(Stream stream, JsonReaderOptions jsonReaderOptions = default, bool sharedBuffer = false, int bufferSize = 1024)
         {
             this.Stream = stream;
+            this.sharedBuffer = sharedBuffer;
 
             if (!this.Stream.CanRead)
                 throw new Exception("Stream is not readable");
 
+            this.pool = ArrayPool<byte>.Shared;
+
             // create a buffer to read the stream into
-            this.buffer = new byte[bufferSize];
+            if (sharedBuffer)
+            {
+                this.buffer = this.pool.Rent(bufferSize);
+            }
+            else
+            {
+                this.buffer = new byte[bufferSize];
+            }
+
             this.dataLen = 0;
             this.dataPos = 0;
             this.isFinalBlock = false;
@@ -236,11 +250,19 @@ namespace JsonExtensions
                 {
                     if (this.buffer != null)
                     {
+                        if (this.sharedBuffer)
+                        {
+                            this.pool.Return(this.buffer);
+                        }
+                        else
+                        {
 #if NET6_0_OR_GREATER
-                        Array.Clear(this.buffer);
+                            Array.Clear(this.buffer);
 #else
-                        Array.Clear(this.buffer, 0, this.buffer.Length);
+                            Array.Clear(this.buffer, 0, this.buffer.Length);
 #endif
+                        }
+
                         this.buffer = null;
                     }
                 }
