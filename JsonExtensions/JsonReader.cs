@@ -16,9 +16,6 @@ namespace JsonExtensions
         /// </summary>
         public Stream Stream { get; }
 
-        // buffer size
-        private readonly int bufferSize;
-        private readonly JsonReaderOptions jsonReaderOptions;
         private const int MaxTokenGap = 1024 * 1024;
 
         /// <summary>
@@ -30,8 +27,6 @@ namespace JsonExtensions
         public JsonReader(Stream stream, JsonReaderOptions jsonReaderOptions = default, int bufferSize = 1024)
         {
             this.Stream = stream;
-            this.bufferSize = bufferSize;
-            this.jsonReaderOptions = jsonReaderOptions;
 
             if (!this.Stream.CanRead)
                 throw new Exception("Stream is not readable");
@@ -61,7 +56,6 @@ namespace JsonExtensions
 
         // state object used internally by Utf8JsonReader
         private JsonReaderState currentState;
-        private JsonReaderState prevState;
 
         // bytes consumed by Utf8JsonReader each time it reads a token
         private int bytesConsumed;
