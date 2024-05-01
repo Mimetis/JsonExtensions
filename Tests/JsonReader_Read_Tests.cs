@@ -194,7 +194,37 @@ namespace Tests
             Assert.Equal("Hot", jsonReader.GetString());
         }
 
+        [Fact]
+        public void ReadAsEscapedString_ShouldReturnEscapedString()
+        {
+            const string jsonEscapedString = "\"Hello\\nWorld\"";
 
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonEscapedString));
+            var jsonReader = new JsonReader(stream, bufferSize: 10);
+
+            jsonReader.Read();
+            Assert.Equal(JsonTokenType.String, jsonReader.TokenType);
+            var result = jsonReader.GetEscapedString();
+
+            Assert.Equal("Hello\\nWorld", result);
+        }
+
+        [Fact]
+        public void ReadAsString_ShouldReturnUnescapedString()
+        {
+            const string jsonEscapedString = "\"Hello\\nWorld\"";
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonEscapedString));
+            var jsonReader = new JsonReader(stream, bufferSize: 10);
+
+            jsonReader.Read();
+            Assert.Equal(JsonTokenType.String, jsonReader.TokenType);
+            var result = jsonReader.GetString();
+
+            const string jsonUnescapedString = "Hello\nWorld";
+
+            Assert.Equal(jsonUnescapedString, result);
+        }
 
         [Fact]
         public void JsonArray_ShouldContainsValidBooleans()
