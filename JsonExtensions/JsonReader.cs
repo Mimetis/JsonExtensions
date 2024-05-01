@@ -150,7 +150,7 @@ namespace JsonExtensions
                     this.hasMore = true;
                     this.TokenType = reader.TokenType;
                     this.Depth = reader.CurrentDepth;
-                    if (reader.TokenType == JsonTokenType.String || reader.TokenType == JsonTokenType.PropertyName)
+                    if (reader.TokenType is JsonTokenType.String or JsonTokenType.PropertyName)
                     {
                         this.Value = reader.ValueSpan.ToArray();
                     }
