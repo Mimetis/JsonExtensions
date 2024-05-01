@@ -1,9 +1,8 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Buffers.Text;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 
 namespace JsonExtensions
 {
@@ -314,7 +313,33 @@ namespace JsonExtensions
             var str = utf8Encoding.GetString(this.Value.ToArray());
 #endif
 
-            return Regex.Unescape(str);
+            StringBuilder sb = new(str.Length);
+            for (int i = 0; i < str.Length; i++)
+            {
+                if (str[i] == '\\' && i < str.Length - 1)
+                {
+                    char nextChar = str[i + 1];
+                    switch (nextChar)
+                    {
+                        case 'n': sb.Append('\n'); break;
+                        case 'r': sb.Append('\r'); break;
+                        case 't': sb.Append('\t'); break;
+                        case 'b': sb.Append('\b'); break;
+                        case 'f': sb.Append('\f'); break;
+                        case '\\': sb.Append('\\'); break;
+                        case '/': sb.Append('/'); break;
+                        case '\"': sb.Append('\"'); break;
+                        default: sb.Append('\\').Append(nextChar); break;
+                    }
+                    i++; // Skip the next character
+                }
+                else
+                {
+                    sb.Append(str[i]);
+                }
+            }
+
+            return sb.ToString();
         }
 
         public string? ReadAsEscapedString()
