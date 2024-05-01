@@ -202,16 +202,27 @@ namespace JsonExtensions
             while (this.Read())
             {
                 JsonReaderValue jsonReaderValue = new() { TokenType = this.TokenType, Depth = this.Depth };
-                if (this.TokenType == JsonTokenType.PropertyName)
-                    jsonReaderValue.Value = JsonValue.Create(this.GetString());
-                else if (this.TokenType == JsonTokenType.Null || this.TokenType == JsonTokenType.None)
-                    jsonReaderValue.Value = null;
-                else if (this.TokenType == JsonTokenType.String)
-                    jsonReaderValue.Value = JsonValue.Create(this.GetString());
-                else if (this.TokenType == JsonTokenType.False || this.TokenType == JsonTokenType.True)
-                    jsonReaderValue.Value = JsonValue.Create(this.GetBoolean());
-                else if (this.TokenType == JsonTokenType.Number)
-                    jsonReaderValue.Value = JsonValue.Create(this.GetDouble());
+
+                switch (this.TokenType)
+                {
+                    case JsonTokenType.PropertyName:
+                        jsonReaderValue.Value = JsonValue.Create(this.GetString());
+                        break;
+                    case JsonTokenType.Null:
+                    case JsonTokenType.None:
+                        jsonReaderValue.Value = null;
+                        break;
+                    case JsonTokenType.String:
+                        jsonReaderValue.Value = JsonValue.Create(this.GetString());
+                        break;
+                    case JsonTokenType.False:
+                    case JsonTokenType.True:
+                        jsonReaderValue.Value = JsonValue.Create(this.GetBoolean());
+                        break;
+                    case JsonTokenType.Number:
+                        jsonReaderValue.Value = JsonValue.Create(this.GetDouble());
+                        break;
+                }
 
                 yield return jsonReaderValue;
             }
@@ -222,24 +233,29 @@ namespace JsonExtensions
         /// </summary>
         public bool Skip()
         {
-            if (this.TokenType == JsonTokenType.PropertyName)
-                return this.Read();
-
-            if (this.TokenType == JsonTokenType.StartObject || this.TokenType == JsonTokenType.StartArray)
+            switch (this.TokenType)
             {
-                int depth = this.Depth;
-                do
-                {
-                    bool hasRead = this.Read();
+                case JsonTokenType.PropertyName:
+                    return this.Read();
+                case JsonTokenType.StartObject:
+                case JsonTokenType.StartArray:
+                    {
+                        int depth = this.Depth;
+                        do
+                        {
+                            bool hasRead = this.Read();
 
-                    if (!hasRead)
-                        return false;
-                }
-                while (depth < this.Depth);
+                            if (!hasRead)
+                                return false;
+                        }
+                        while (depth < this.Depth);
 
-                return true;
+                        return true;
+                    }
+
+                default:
+                    return false;
             }
-            return false;
         }
 
         protected virtual void Dispose(bool disposing)
@@ -515,12 +531,15 @@ namespace JsonExtensions
 
         public bool? GetBoolean()
         {
-            if (this.TokenType == JsonTokenType.True)
-                return true;
-            else if (this.TokenType == JsonTokenType.False)
-                return false;
-            else
-                return null;
+            switch (this.TokenType)
+            {
+                case JsonTokenType.True:
+                    return true;
+                case JsonTokenType.False:
+                    return false;
+                default:
+                    return null;
+            }
         }
 
         //public byte[] GetBytesFromBase64()
