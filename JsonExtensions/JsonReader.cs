@@ -2,7 +2,6 @@ using System.Buffers.Text;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 
 namespace JsonExtensions
 {
@@ -272,7 +271,7 @@ namespace JsonExtensions
 
             var str = utf8Encoding.GetString(this.Value.Span);
 
-            return Regex.Unescape(str);
+            return JsonEncodedText.Encode(str).ToString();
         }
 
         public string? ReadAsEscapedString()
