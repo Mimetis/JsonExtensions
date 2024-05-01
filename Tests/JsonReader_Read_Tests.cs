@@ -216,9 +216,40 @@ namespace Tests
 
             // asert Current
             Assert.False(jsonReader.ReadAsBoolean());
-
-
         }
 
+        [Fact]
+        public void PropertyNameToken_ShouldHaveCorrectValue()
+        {
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonSmallObject));
+            var jsonReader = new JsonReader(stream, bufferSize: 10);
+
+            jsonReader.Read();
+            Assert.Equal(JsonTokenType.StartObject, jsonReader.TokenType);
+
+            jsonReader.Read();
+            Assert.Equal(JsonTokenType.PropertyName, jsonReader.TokenType);
+            Assert.Equal("a", jsonReader.GetString());
+
+            jsonReader.Read();
+            Assert.Equal(JsonTokenType.Number, jsonReader.TokenType);
+
+            jsonReader.Read();
+            Assert.Equal(JsonTokenType.PropertyName, jsonReader.TokenType);
+            Assert.Equal("b", jsonReader.GetString());
+
+            jsonReader.Read();
+            Assert.Equal(JsonTokenType.Number, jsonReader.TokenType);
+
+            jsonReader.Read();
+            Assert.Equal(JsonTokenType.PropertyName, jsonReader.TokenType);
+            Assert.Equal("c", jsonReader.GetString());
+
+            jsonReader.Read();
+            Assert.Equal(JsonTokenType.Number, jsonReader.TokenType);
+
+            jsonReader.Read();
+            Assert.Equal(JsonTokenType.EndObject, jsonReader.TokenType);
+        }
     }
 }
