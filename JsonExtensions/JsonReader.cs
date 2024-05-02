@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Buffers.Text;
 using System.Diagnostics;
 using System.Text;
@@ -277,7 +277,7 @@ namespace JsonExtensions
             if (this.TokenType != JsonTokenType.PropertyName && this.TokenType != JsonTokenType.String)
                 return null;
 
-            var str = utf8Encoding.GetString(this.Value.ToArray());
+            var str = utf8Encoding.GetString(this.Value.Span);
 
             return Regex.Unescape(str);
         }
@@ -291,7 +291,7 @@ namespace JsonExtensions
             if (this.TokenType != JsonTokenType.PropertyName && this.TokenType != JsonTokenType.String)
                 return null;
 
-            var str = utf8Encoding.GetString(this.Value.ToArray());
+            var str = utf8Encoding.GetString(this.Value.Span);
 
             return str;
         }
