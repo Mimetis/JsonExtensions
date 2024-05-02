@@ -75,7 +75,7 @@ namespace Tests
         {
             var largeGapJson = $"{{ \"a\": {new String(' ', 2 * 1024 * 1024)}10 }}";
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(largeGapJson));
-            var jsonReader = new JsonReader(stream, bufferSize:10);
+            using var jsonReader = new JsonReader(stream, bufferSize:10);
 
             jsonReader.Read();
             jsonReader.Read();
@@ -88,7 +88,7 @@ namespace Tests
         public async Task InvalidJson_ShouldThrow()
         {
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonInvalid));
-            var jsonReader = new JsonReader(stream, bufferSize: 10);
+            using var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
             jsonReader.Read();
@@ -100,7 +100,7 @@ namespace Tests
         public async Task UnbalancedObject_ShouldThrow()
         {
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonUnbalancedObject));
-            var jsonReader = new JsonReader(stream, bufferSize: 10);
+            using var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
 
@@ -118,7 +118,7 @@ namespace Tests
         public async Task UnbalancedArray_ShouldThrow()
         {
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonUnbalancedArray));
-            var jsonReader = new JsonReader(stream, bufferSize: 10);
+            using var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
 
@@ -132,7 +132,7 @@ namespace Tests
         public async Task SmallObject_ShouldContainsAllTokens()
         {
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonSmallObject));
-            var jsonReader = new JsonReader(stream, bufferSize: 10);
+            using var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
             Assert.Equal(JsonTokenType.StartObject, jsonReader.TokenType);
@@ -156,7 +156,7 @@ namespace Tests
         public async Task SmallArray_ShouldContainsAllTokens()
         {
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonSmallArray));
-            var jsonReader = new JsonReader(stream, bufferSize: 10);
+            using var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
             Assert.Equal(JsonTokenType.StartArray, jsonReader.TokenType);
@@ -175,7 +175,7 @@ namespace Tests
         public async Task JsonArray_ShouldContainsValidStringTypes()
         {
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonArray));
-            var jsonReader = new JsonReader(stream, bufferSize: 10);
+            using var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             // first method: Using Read() the GetString()
             do { jsonReader.Read(); } while (jsonReader.TokenType != JsonTokenType.PropertyName && jsonReader.GetString() != "Date");
@@ -199,7 +199,7 @@ namespace Tests
                 """;
 
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonEscapedString));
-            var jsonReader = new JsonReader(stream, bufferSize: 10);
+            using var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
             Assert.Equal(JsonTokenType.String, jsonReader.TokenType);
@@ -219,7 +219,7 @@ namespace Tests
                 """;
 
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonEscapedString));
-            var jsonReader = new JsonReader(stream, bufferSize: 10);
+            using var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
             Assert.Equal(JsonTokenType.String, jsonReader.TokenType);
@@ -234,7 +234,7 @@ namespace Tests
         public async Task JsonArray_ShouldContainsValidBooleans()
         {
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonArray));
-            var jsonReader = new JsonReader(stream, bufferSize: 10);
+            using var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             // select first token
             jsonReader.Values().First(jr => jr.Value?.ToString() == "IsHot");
@@ -256,7 +256,7 @@ namespace Tests
         public async Task PropertyNameToken_ShouldHaveCorrectValue()
         {
             await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonSmallObject));
-            var jsonReader = new JsonReader(stream, bufferSize: 10);
+            using var jsonReader = new JsonReader(stream, bufferSize: 10);
 
             jsonReader.Read();
             Assert.Equal(JsonTokenType.StartObject, jsonReader.TokenType);
