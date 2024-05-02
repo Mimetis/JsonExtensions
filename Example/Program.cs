@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using JsonExtensions;
+using System.Diagnostics;
 
 namespace ConsoleJsonSample
 {
@@ -12,6 +13,11 @@ namespace ConsoleJsonSample
         // to be sure we can call the JsonReader.Read() method from an async scope
         static async Task Main(string[] args)
         {
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
+
+            var initialMemory = GC.GetTotalMemory(true);
+
             var jsonReader = new JsonReader(GetFileStream()); // test 10 to see buffer increase in debug console
 
             while (jsonReader.Read())
@@ -40,6 +46,12 @@ namespace ConsoleJsonSample
 
             }
 
+            stopwatch.Stop();
+
+            var finalMemory = GC.GetTotalMemory(true);
+
+            Console.WriteLine($"Elapsed time: {stopwatch.ElapsedMilliseconds} ms");
+            Console.WriteLine($"Memory allocated: {finalMemory - initialMemory} bytes");
         }
 
 
