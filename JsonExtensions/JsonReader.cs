@@ -170,7 +170,7 @@ namespace JsonExtensions
                     if (this.dataPos > 0)
                     {
                         // Shift partial token data to the start of the buffer
-                        Array.Copy(this.buffer, this.dataPos, this.buffer, 0, this.dataLen);
+                        Buffer.BlockCopy(this.buffer, this.dataPos, this.buffer, 0, this.dataLen);
                         this.dataPos = 0;
                     }
 
@@ -180,7 +180,9 @@ namespace JsonExtensions
                         if (this.buffer.Length > MaxTokenGap)
                             throw new JsonException($"sanity check on input stream failed, json token gap of more than {MaxTokenGap} bytes");
 
-                        Array.Resize(ref this.buffer, this.buffer.Length * 2);
+                        var newBuffer = new byte[this.buffer.Length * 2];
+                        Buffer.BlockCopy(this.buffer, 0, newBuffer, 0, this.buffer.Length);
+                        this.buffer = newBuffer;
                     }
 
                     this.hasMore = false;
