@@ -28,6 +28,7 @@ namespace Tests
             """;
 
         private const string jsonSmallObject = 
+            /*lang=json,strict*/
             """
                                                                                                 {
                 "a": 12,
@@ -39,6 +40,7 @@ namespace Tests
         private const string jsonSmallArray = """[12,12,12]""";
 
         private const string jsonArray =
+            /*lang=json,strict*/
             """
             [{
                 "Date": "2019-08-01T00:00:00-07:00",

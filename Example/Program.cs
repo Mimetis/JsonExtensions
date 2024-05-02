@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -58,24 +58,29 @@ namespace ConsoleJsonSample
         }
         static MemoryStream GetMemoryStream()
         {
-            var jsonString = @"[{
-                ""Date"": ""2019-08-01T00:00:00-07:00"",
-                ""Temperature"": 25,
-                ""TemperatureRanges"": {
-                    ""Cold"": { ""High"": 20, ""Low"": -10.5 },
-                    ""Hot"": { ""High"": 60, ""Low"": 20 }
-                },
-                ""Summary"": ""Hot""
-            }, 
-            {
-                ""Date"": ""2019-08-01T00:00:00-07:00"",
-                ""Temperature"": 25,
-                ""TemperatureRanges"": {
-                    ""Cold"": { ""High"": 20, ""Low"": -10 },
-                    ""Hot"": { ""High"": 60, ""Low"": 20 }
-                },
-                ""Summary"": ""Hot""
-            }]";
+            const string jsonString =
+                /*lang=json*/
+                """
+                [
+                    {
+                        "Date": "2019-08-01T00:00:00-07:00",
+                        "Temperature": 25,
+                        "TemperatureRanges": {
+                            "Cold": { "High": 20, "Low": -10.5 },
+                            "Hot": { "High": 60, "Low": 20 }
+                        },
+                        "Summary": "Hot"
+                    }, 
+                    {
+                        "Date": "2019-08-01T00:00:00-07:00",
+                        "Temperature": 25,
+                        "TemperatureRanges": {
+                            "Cold": { "High": 20, "Low": -10 },
+                            "Hot": { "High": 60, "Low": 20 }
+                        },
+                        "Summary": "Hot"
+                    }]
+                """;
 
             byte[] bytes = Encoding.UTF8.GetBytes(jsonString);
             return new MemoryStream(bytes);
