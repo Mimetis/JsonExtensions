@@ -1,6 +1,4 @@
-﻿using System.Buffers;
-using System.Buffers.Text;
-using System.Diagnostics;
+﻿using System.Buffers.Text;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -8,7 +6,6 @@ using System.Text.RegularExpressions;
 
 namespace JsonExtensions
 {
-
     public class JsonReader : IDisposable
     {
 
