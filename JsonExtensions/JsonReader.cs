@@ -277,7 +277,11 @@ namespace JsonExtensions
             if (this.TokenType != JsonTokenType.PropertyName && this.TokenType != JsonTokenType.String)
                 return null;
 
+#if NET6_0_OR_GREATER
+            var str = utf8Encoding.GetString(this.Value.Span);
+#else   
             var str = utf8Encoding.GetString(this.Value.ToArray());
+#endif
 
             return Regex.Unescape(str);
         }
@@ -291,7 +295,11 @@ namespace JsonExtensions
             if (this.TokenType != JsonTokenType.PropertyName && this.TokenType != JsonTokenType.String)
                 return null;
 
+#if NET6_0_OR_GREATER
+            var str = utf8Encoding.GetString(this.Value.Span);
+#else   
             var str = utf8Encoding.GetString(this.Value.ToArray());
+#endif
 
             return str;
         }
