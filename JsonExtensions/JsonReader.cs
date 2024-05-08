@@ -495,10 +495,10 @@ namespace JsonExtensions
             var sb = new StringBuilder($"Type: {this.TokenType} - Depth: {this.Depth}");
 
             if (this.TokenType == JsonTokenType.PropertyName)
-                sb.Append($" - Property: {this.Value}");
+                sb.Append(" - Property: ").Append(this.Value);
 
             if (this.Value != null)
-                sb.Append($" - Value: {this.Value}");
+                sb.Append(" - Value: ").Append(this.Value);
 
             return sb.ToString();
         }
