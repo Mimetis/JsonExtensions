@@ -1,4 +1,5 @@
 using System.Buffers.Text;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -97,7 +98,7 @@ namespace JsonExtensions
         /// </summary>
         /// <returns>true if a token has been read otherwise false</returns>
         /// <exception cref="JsonException"></exception>
-        public async ValueTask<bool> ReadAsync()
+        public async ValueTask<bool> ReadAsync(CancellationToken cancellationToken = default)
         {
             if (this.buffer == null)
                 throw new ArgumentNullException(nameof(this.buffer));
@@ -116,9 +117,9 @@ namespace JsonExtensions
                     // there's space left in the buffer, try to fill it with new data
                     int todo = this.buffer.Length - this.dataLen;
 #if NET6_0_OR_GREATER
-                    int done = await this.Stream.ReadAsync(this.buffer.AsMemory(this.dataLen, todo));
+                    int done = await this.Stream.ReadAsync(this.buffer.AsMemory(this.dataLen, todo), cancellationToken);
 #else
-                    int done = await this.Stream.ReadAsync(this.buffer, this.dataLen, todo);
+                    int done = await this.Stream.ReadAsync(this.buffer, this.dataLen, todo, cancellationToken);
 #endif
                     this.dataLen += done;
                     this.isFinalBlock = done < todo;
@@ -192,9 +193,9 @@ namespace JsonExtensions
         /// Enumerate over the stream and read the properties
         /// </summary>
         /// <returns></returns>
-        public async IAsyncEnumerable<JsonReaderValue> Values()
+        public async IAsyncEnumerable<JsonReaderValue> Values([EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            while (await this.ReadAsync())
+            while (await this.ReadAsync(cancellationToken))
             {
                 JsonReaderValue jsonReaderValue = new() { TokenType = this.TokenType, Depth = this.Depth };
                 if (this.TokenType == JsonTokenType.PropertyName)
@@ -215,17 +216,17 @@ namespace JsonExtensions
         /// <summary>
         /// Skips the children of the current token.
         /// </summary>
-        public async ValueTask<bool> SkipAsync()
+        public async ValueTask<bool> SkipAsync(CancellationToken cancellationToken = default)
         {
             if (this.TokenType == JsonTokenType.PropertyName)
-                return await this.ReadAsync();
+                return await this.ReadAsync(cancellationToken);
 
             if (this.TokenType == JsonTokenType.StartObject || this.TokenType == JsonTokenType.StartArray)
             {
                 int depth = this.Depth;
                 do
                 {
-                    bool hasRead = await this.ReadAsync();
+                    bool hasRead = await this.ReadAsync(cancellationToken);
 
                     if (!hasRead)
                         return false;
@@ -267,9 +268,9 @@ namespace JsonExtensions
             GC.SuppressFinalize(this);
         }
 
-        public async ValueTask<string?> ReadAsString()
+        public async ValueTask<string?> ReadAsString(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetString();
         }
 
@@ -287,9 +288,9 @@ namespace JsonExtensions
             return Regex.Unescape(str);
         }
 
-        public async ValueTask<string?> ReadAsEscapedString()
+        public async ValueTask<string?> ReadAsEscapedString(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetEscapedString();
         }
 
@@ -307,9 +308,9 @@ namespace JsonExtensions
             return str;
         }
 
-        public async ValueTask<Guid?> ReadAsGuid()
+        public async ValueTask<Guid?> ReadAsGuid(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetGuid();
         }
 
@@ -324,9 +325,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse double");
         }
 
-        public async ValueTask<TimeSpan?> ReadAsTimeSpan()
+        public async ValueTask<TimeSpan?> ReadAsTimeSpan(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetTimeSpan();
         }
 
@@ -341,9 +342,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse TimeSpan");
         }
 
-        public async ValueTask<DateTimeOffset?> ReadAsDateTimeOffset()
+        public async ValueTask<DateTimeOffset?> ReadAsDateTimeOffset(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetDateTimeOffset();
         }
 
@@ -358,9 +359,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse DateTimeOffset");
         }
 
-        public async ValueTask<DateTime?> ReadAsDateTime()
+        public async ValueTask<DateTime?> ReadAsDateTime(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetDateTime();
         }
 
@@ -375,9 +376,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse GetDateTime");
         }
 
-        public async ValueTask<double?> ReadAsDouble()
+        public async ValueTask<double?> ReadAsDouble(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetDouble();
         }
 
@@ -392,9 +393,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse double");
         }
 
-        public async ValueTask<decimal?> ReadAsDecimal()
+        public async ValueTask<decimal?> ReadAsDecimal(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetDecimal();
         }
 
@@ -409,9 +410,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse decimal");
         }
 
-        public async ValueTask<float?> ReadAsSingle()
+        public async ValueTask<float?> ReadAsSingle(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetSingle();
         }
 
@@ -426,9 +427,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse float");
         }
 
-        public async ValueTask<long?> ReadAsInt64()
+        public async ValueTask<long?> ReadAsInt64(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetInt64();
         }
 
@@ -443,9 +444,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse long");
         }
 
-        public async ValueTask<int?> ReadAsInt32()
+        public async ValueTask<int?> ReadAsInt32(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetInt32();
         }
 
@@ -460,9 +461,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse int");
         }
 
-        public async ValueTask<short?> ReadAsInt16()
+        public async ValueTask<short?> ReadAsInt16(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetInt16();
         }
 
@@ -477,9 +478,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse short");
         }
 
-        public async ValueTask<byte?> ReadAsByte()
+        public async ValueTask<byte?> ReadAsByte(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetByte();
         }
 
@@ -494,9 +495,9 @@ namespace JsonExtensions
             throw new FormatException("Can't parse byte");
         }
 
-        public async ValueTask<bool?> ReadAsBoolean()
+        public async ValueTask<bool?> ReadAsBoolean(CancellationToken cancellationToken = default)
         {
-            await this.ReadAsync();
+            await this.ReadAsync(cancellationToken);
             return this.GetBoolean();
         }
     
