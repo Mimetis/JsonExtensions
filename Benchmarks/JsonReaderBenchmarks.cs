@@ -7,8 +7,8 @@ using System.Text.Json;
 [Config(typeof(AntiVirusFriendlyConfig))]
 public class JsonReaderBenchmarks
 {
-    private JsonReader? _jsonReader;
-    private FileStream? _fileStream;
+    private JsonReader jsonReader = null!;
+    private FileStream fileStream = null!;
 
     private const int IterationsNum = 100;
 
@@ -16,38 +16,38 @@ public class JsonReaderBenchmarks
     public void Setup()
     {
         string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dummy-data.json");
-        _fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
-        _jsonReader = new JsonReader(_fileStream);
+        this.fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
+        this.jsonReader = new JsonReader(this.fileStream);
     }
 
     [GlobalCleanup]
-    public void Cleanup()
+    public async ValueTask Cleanup()
     {
-        _fileStream?.Dispose();
-        _jsonReader?.Dispose();
+        await this.fileStream.DisposeAsync();
+        this.jsonReader.Dispose();
     }
 
     [IterationCleanup]
     public void IterationCleanup()
     {
-        _fileStream?.Seek(0, SeekOrigin.Begin);
-        _jsonReader?.Dispose();
-        _jsonReader = new JsonReader(_fileStream);
+        this.fileStream.Seek(0, SeekOrigin.Begin);
+        this.jsonReader.Dispose();
+        this.jsonReader = new JsonReader(this.fileStream);
     }
 
     [Benchmark]
     [IterationCount(IterationsNum)]
-    public void Read()
+    public async Task Read()
     {
-        ArgumentNullException.ThrowIfNull(_jsonReader);
+        ArgumentNullException.ThrowIfNull(this.jsonReader);
 
         int count = 0;
 
-        while (_jsonReader.Read())
+        while (await this.jsonReader.ReadAsync())
         {
-            var tokenString = _jsonReader.GetString();
+            var tokenString = this.jsonReader.GetString();
 
-            if (_jsonReader.TokenType == JsonTokenType.PropertyName)
+            if (this.jsonReader.TokenType == JsonTokenType.PropertyName)
             {
                 // TODO: Perform some operation
             }
@@ -61,13 +61,13 @@ public class JsonReaderBenchmarks
     
     [Benchmark]
     [IterationCount(IterationsNum)]
-    public void Values()
+    public async Task Values()
     {
-        ArgumentNullException.ThrowIfNull(_jsonReader);
+        ArgumentNullException.ThrowIfNull(this.jsonReader);
 
         int count = 0;
 
-        foreach (var value in _jsonReader.Values())
+        await foreach (var value in this.jsonReader.Values())
         {
             var tokenString = value.ToString();
 
