@@ -1,6 +1,5 @@
-﻿using System.Buffers;
 using System.Buffers.Text;
-using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -8,10 +7,8 @@ using System.Text.RegularExpressions;
 
 namespace JsonExtensions
 {
-
     public class JsonReader : IDisposable
     {
-
         // encoding used to convert bytes to string
         private static readonly UTF8Encoding utf8Encoding = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
@@ -96,14 +93,12 @@ namespace JsonExtensions
         /// </summary>
         public int Depth { get; private set; } = 0;
 
-
-
         /// <summary>
         /// Read the next value. Can be any TokenType
         /// </summary>
         /// <returns>true if a token has been read otherwise false</returns>
         /// <exception cref="JsonException"></exception>
-        public bool Read()
+        public async ValueTask<bool> ReadAsync(CancellationToken cancellationToken = default)
         {
             if (this.buffer == null)
                 throw new ArgumentNullException(nameof(this.buffer));
@@ -121,7 +116,11 @@ namespace JsonExtensions
                 {
                     // there's space left in the buffer, try to fill it with new data
                     int todo = this.buffer.Length - this.dataLen;
-                    int done = this.Stream.Read(this.buffer, this.dataLen, todo);
+#if NET6_0_OR_GREATER
+                    int done = await this.Stream.ReadAsync(this.buffer.AsMemory(this.dataLen, todo), cancellationToken);
+#else
+                    int done = await this.Stream.ReadAsync(this.buffer, this.dataLen, todo, cancellationToken);
+#endif
                     this.dataLen += done;
                     this.isFinalBlock = done < todo;
                     this.bytesConsumed = 0;
@@ -131,30 +130,10 @@ namespace JsonExtensions
                 this.dataPos += this.bytesConsumed;
                 this.dataLen -= this.bytesConsumed;
 
-                // create a new ref struct json reader
-                var spanBuffer = new ReadOnlySpan<byte>(this.buffer, this.dataPos, this.dataLen);
-                // Trace.WriteLine($"span starting from {dataPos} : {BitConverter.ToString(spanBuffer.ToArray())}");
-
-                var reader = new Utf8JsonReader(spanBuffer, this.isFinalBlock, state: this.currentState);
-
-                // try to read nex token
-                foundToken = reader.Read();
-
-                // we have a valid token
-                if (foundToken)
-                {
-                    this.currentState = reader.CurrentState;
-                    this.bytesConsumed = (int)reader.BytesConsumed;
-                    this.tokensFound++;
-                    this.hasMore = true;
-                    this.TokenType = reader.TokenType;
-                    this.Depth = reader.CurrentDepth;
-                    this.Value = new ReadOnlyMemory<byte>(reader.ValueSpan.ToArray());
-                    return true;
-                }
+                foundToken = this.TryReadNextToken();
 
                 // if we don't have any more bytes and in final block, we can exit
-                if (this.dataLen <= 0 && this.isFinalBlock)
+                if (foundToken || this.dataLen <= 0 && this.isFinalBlock)
                     break;
 
                 if (!this.isFinalBlock)
@@ -183,6 +162,30 @@ namespace JsonExtensions
                     foundToken = false;
                 }
             }
+
+            return foundToken;
+        }
+
+        private bool TryReadNextToken()
+        {
+            // create a new ref struct json reader
+            var spanBuffer = new ReadOnlySpan<byte>(this.buffer, this.dataPos, this.dataLen);
+
+            var reader = new Utf8JsonReader(spanBuffer, this.isFinalBlock, state: this.currentState);
+
+            // try to read next token
+            if (reader.Read())
+            {
+                this.currentState = reader.CurrentState;
+                this.bytesConsumed = (int)reader.BytesConsumed;
+                this.tokensFound++;
+                this.hasMore = true;
+                this.TokenType = reader.TokenType;
+                this.Depth = reader.CurrentDepth;
+                this.Value = new ReadOnlyMemory<byte>(reader.ValueSpan.ToArray());
+                return true;
+            }
+
             return false;
         }
 
@@ -190,9 +193,9 @@ namespace JsonExtensions
         /// Enumerate over the stream and read the properties
         /// </summary>
         /// <returns></returns>
-        public IEnumerable<JsonReaderValue> Values()
+        public async IAsyncEnumerable<JsonReaderValue> Values([EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            while (this.Read())
+            while (await this.ReadAsync(cancellationToken))
             {
                 JsonReaderValue jsonReaderValue = new() { TokenType = this.TokenType, Depth = this.Depth };
                 if (this.TokenType == JsonTokenType.PropertyName)
@@ -213,17 +216,17 @@ namespace JsonExtensions
         /// <summary>
         /// Skips the children of the current token.
         /// </summary>
-        public bool Skip()
+        public async ValueTask<bool> SkipAsync(CancellationToken cancellationToken = default)
         {
             if (this.TokenType == JsonTokenType.PropertyName)
-                return this.Read();
+                return await this.ReadAsync(cancellationToken);
 
             if (this.TokenType == JsonTokenType.StartObject || this.TokenType == JsonTokenType.StartArray)
             {
                 int depth = this.Depth;
                 do
                 {
-                    bool hasRead = this.Read();
+                    bool hasRead = await this.ReadAsync(cancellationToken);
 
                     if (!hasRead)
                         return false;
@@ -234,7 +237,6 @@ namespace JsonExtensions
             }
             return false;
         }
-
 
         protected virtual void Dispose(bool disposing)
         {
@@ -266,12 +268,12 @@ namespace JsonExtensions
             GC.SuppressFinalize(this);
         }
 
-
-        public string? ReadAsString()
+        public async ValueTask<string?> ReadAsString(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetString();
         }
+
         public string? GetString()
         {
             if (this.TokenType != JsonTokenType.PropertyName && this.TokenType != JsonTokenType.String)
@@ -285,11 +287,13 @@ namespace JsonExtensions
 
             return Regex.Unescape(str);
         }
-        public string? ReadAsEscapedString()
+
+        public async ValueTask<string?> ReadAsEscapedString(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetEscapedString();
         }
+
         public string? GetEscapedString()
         {
             if (this.TokenType != JsonTokenType.PropertyName && this.TokenType != JsonTokenType.String)
@@ -303,11 +307,13 @@ namespace JsonExtensions
 
             return str;
         }
-        public Guid? ReadAsGuid()
+
+        public async ValueTask<Guid?> ReadAsGuid(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetGuid();
         }
+
         public Guid? GetGuid()
         {
             if (this.TokenType != JsonTokenType.String)
@@ -318,11 +324,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse double");
         }
-        public TimeSpan? ReadAsTimeSpan()
+
+        public async ValueTask<TimeSpan?> ReadAsTimeSpan(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetTimeSpan();
         }
+
         public TimeSpan? GetTimeSpan()
         {
             if (this.TokenType != JsonTokenType.String)
@@ -333,11 +341,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse TimeSpan");
         }
-        public DateTimeOffset? ReadAsDateTimeOffset()
+
+        public async ValueTask<DateTimeOffset?> ReadAsDateTimeOffset(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetDateTimeOffset();
         }
+
         public DateTimeOffset? GetDateTimeOffset()
         {
             if (this.TokenType != JsonTokenType.String)
@@ -348,11 +358,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse DateTimeOffset");
         }
-        public DateTime? ReadAsDateTime()
+
+        public async ValueTask<DateTime?> ReadAsDateTime(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetDateTime();
         }
+
         public DateTime? GetDateTime()
         {
             if (this.TokenType != JsonTokenType.String)
@@ -363,11 +375,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse GetDateTime");
         }
-        public double? ReadAsDouble()
+
+        public async ValueTask<double?> ReadAsDouble(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetDouble();
         }
+
         public double? GetDouble()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -378,11 +392,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse double");
         }
-        public decimal? ReadAsDecimal()
+
+        public async ValueTask<decimal?> ReadAsDecimal(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetDecimal();
         }
+
         public decimal? GetDecimal()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -393,11 +409,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse decimal");
         }
-        public float? ReadAsSingle()
+
+        public async ValueTask<float?> ReadAsSingle(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetSingle();
         }
+
         public float? GetSingle()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -408,11 +426,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse float");
         }
-        public long? ReadAsInt64()
+
+        public async ValueTask<long?> ReadAsInt64(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetInt64();
         }
+
         public long? GetInt64()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -423,11 +443,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse long");
         }
-        public int? ReadAsInt32()
+
+        public async ValueTask<int?> ReadAsInt32(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetInt32();
         }
+
         public int? GetInt32()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -438,11 +460,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse int");
         }
-        public short? ReadAsInt16()
+
+        public async ValueTask<short?> ReadAsInt16(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetInt16();
         }
+
         public short? GetInt16()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -453,11 +477,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse short");
         }
-        public byte? ReadAsByte()
+
+        public async ValueTask<byte?> ReadAsByte(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetByte();
         }
+
         public byte? GetByte()
         {
             if (this.TokenType != JsonTokenType.Number)
@@ -468,11 +494,13 @@ namespace JsonExtensions
 
             throw new FormatException("Can't parse byte");
         }
-        public bool? ReadAsBoolean()
+
+        public async ValueTask<bool?> ReadAsBoolean(CancellationToken cancellationToken = default)
         {
-            this.Read();
+            await this.ReadAsync(cancellationToken);
             return this.GetBoolean();
         }
+    
         public bool? GetBoolean()
         {
             if (this.TokenType == JsonTokenType.True)

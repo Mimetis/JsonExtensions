@@ -1,5 +1,3 @@
-﻿using System.Data;
-using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using JsonExtensions;
@@ -12,9 +10,9 @@ namespace ConsoleJsonSample
         // to be sure we can call the JsonReader.Read() method from an async scope
         static async Task Main(string[] args)
         {
-            var jsonReader = new JsonReader(GetFileStream()); // test 10 to see buffer increase in debug console
+            using var jsonReader = new JsonReader(GetFileStream()); // test 10 to see buffer increase in debug console
 
-            while (jsonReader.Read())
+            while (await jsonReader.ReadAsync())
             {
                 // write numbers of space for the current depth
                 var indent = new string(' ', jsonReader.Depth * 2);
@@ -39,7 +37,6 @@ namespace ConsoleJsonSample
                     Console.WriteLine();
 
             }
-
         }
 
 
