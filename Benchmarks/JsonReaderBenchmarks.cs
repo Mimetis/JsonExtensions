@@ -32,6 +32,7 @@ public class JsonReaderBenchmarks
     {
         _fileStream.Dispose();
         _jsonReader?.Dispose();
+        _jsonStreamAsyncReader?.Dispose(true);
     }
 
     [IterationCleanup]
