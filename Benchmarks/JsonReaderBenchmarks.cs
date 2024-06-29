@@ -39,8 +39,6 @@ public class JsonReaderBenchmarks
     public void IterationCleanup()
     {
         _fileStream.Seek(0, SeekOrigin.Begin);
-        _jsonReader?.Dispose();
-        _jsonReader = new JsonReader(_fileStream);
     }
 
     [Benchmark]
